@@ -2450,6 +2450,30 @@ USER_HTML = r"""<!DOCTYPE html>
       cursor: pointer;
       touch-action: none;
     }
+    .pm-muted {color:#aaa9bf;font-size:13px;line-height:1.6;margin:10px 0;display:block;}
+    .pm-presets {display:flex;gap:10px;flex-wrap:wrap;margin:16px 0;}
+    .pm-presets .btn {width:auto;flex:1;min-width:100px;padding:12px;}
+    .pm-admin-list {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:16px;}
+    .pm-admin-card,.pm-details {padding:20px;border:1px solid #ffffff25;border-radius:18px;background:#0c0a20a6;margin:12px 0;}
+    .pm-method-heading {display:flex;align-items:center;gap:14px;}
+    .pm-logo {height:48px;width:48px;object-fit:contain;background:white;padding:4px;border-radius:12px;flex-shrink:0;}
+    .pm-account {overflow-wrap:anywhere;white-space:pre-wrap;line-height:1.6;}
+    .pm-form-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}
+    .pm-form-grid select {width:100%;padding:14px;background:#191128;color:#fff;border:1px solid #ffffff35;border-radius:12px;}
+    .pm-logo-preview {display:flex;align-items:center;gap:12px;margin:12px 0;}
+    .pm-logo-preview img {width:72px;height:72px;object-fit:contain;background:white;border-radius:12px;}
+    .pm-toggle {display:flex;gap:12px;align-items:center;margin:20px 0;cursor:pointer;}
+    .pm-toggle input {width:22px;height:22px;accent-color:#00dfae;}
+    .pm-choice-list {display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:18px 0;}
+    .pm-choice {display:flex;align-items:center;justify-content:center;gap:10px;flex-direction:column;padding:16px 10px;background:#1e1433;color:white;border:2px solid #ffffff25;border-radius:16px;font-size:15px;font-weight:700;cursor:pointer;transition:transform .2s,border-color .2s;}
+    .pm-choice:hover {transform:translateY(-2px);border-color:#a855f7;}
+    .pm-choice.selected {border-color:#00e5cc;box-shadow:0 0 18px #00e5cc25;background:#123333;}
+    .pm-choice:focus-visible {outline:3px solid white;outline-offset:3px;}
+    #methodPayable {font-size:26px;color:#00ffc3;display:block;margin:16px 0;font-weight:800;}
+    #paymentInstructions {white-space:pre-wrap;overflow-wrap:anywhere;}
+    #confirmPaymentBtn:disabled {opacity:.45;cursor:not-allowed;}
+    .pm-details[hidden],#paymentMethodQr[hidden] {display:none!important;}
+    @media(max-width:540px){.pm-form-grid{grid-template-columns:1fr;gap:0}.pm-details{padding:16px}.pm-choice-list{grid-template-columns:repeat(3,minmax(0,1fr))}.pm-choice{font-size:13px;overflow-wrap:anywhere;}}
   </style>
 </head>
 <body>
@@ -2642,24 +2666,31 @@ USER_HTML = r"""<!DOCTYPE html>
         </div>
       </div>
 
-      <img class="qr-image" src="https://i.ibb.co/RTNBtWmc/file-000000004df8724699e53cff0d1f183c.png" alt="QR Code">
-      <p class="info-text">
-        <i class="fas fa-info-circle"></i> Scan the QR code and complete payment. Enter your payment details below to confirm your order.
-      </p>
-      
+      <p class="info-text">Choose how you want to pay.</p>
+      <div id="paymentMethodsList" class="pm-choice-list" aria-label="Payment methods">Loading payment methods...</div>
+      <div id="paymentMethodDetails" class="pm-details" hidden>
+        <h3 id="paymentMethodName"></h3>
+        <div class="pm-muted">Send payment to</div>
+        <p id="paymentReceiver" class="pm-account"></p>
+        <button class="btn btn-secondary" type="button" onclick="copyPaymentReceiver()">Copy receiving details</button>
+        <strong id="methodPayable"></strong>
+        <img id="paymentMethodQr" class="qr-image" alt="Payment QR code" hidden>
+        <p id="paymentInstructions" class="info-text"></p>
+      </div>
+
       <div class="input-group">
-        <label><i class="fas fa-dollar-sign"></i> Enter Your Amount</label>
-        <input type="number" id="userAmount" placeholder="Enter amount you paid" min="1" required>
+        <label><i class="fas fa-dollar-sign"></i> Amount Paid (<span id="paidCurrency">payment currency</span>)</label>
+        <input type="number" id="userAmount" placeholder="Enter amount you paid" min="0.01" step="0.01" required>
         <small style="color: #999; font-size: 12px; margin-top: 5px; display: block;">
-          Enter the exact amount you paid via UPI/Bank Transfer
+          Enter the exact amount sent through your selected payment method
         </small>
       </div>
 
       <div class="input-group">
         <label><i class="fas fa-receipt"></i> UTR ID / Transaction ID</label>
-        <input type="text" id="utrId" placeholder="Enter 10-16 character UTR ID" maxlength="16" required>
+        <input type="text" id="utrId" placeholder="Enter transaction ID / Binance Pay order ID" maxlength="128" required>
         <small style="color: #999; font-size: 12px; margin-top: 5px; display: block;">
-          UTR ID is found in your payment confirmation message/screenshot
+          Find this ID in your payment confirmation or transaction history
         </small>
       </div>
       
@@ -2667,7 +2698,7 @@ USER_HTML = r"""<!DOCTYPE html>
         <button class="btn btn-secondary" onclick="closeModal('paymentModal')">
           <i class="fas fa-times"></i> Cancel
         </button>
-        <button class="btn" onclick="confirmPurchase()">
+        <button class="btn" id="confirmPaymentBtn" onclick="confirmPurchase()" disabled>
           <i class="fas fa-check"></i> Confirm Order
         </button>
       </div>
@@ -3859,6 +3890,49 @@ function applyFilter(products, filter) {
       }
     }
 
+    let activePaymentMethods = {};
+    let selectedPaymentMethodId = null;
+    let paymentMethodsUnsubscribe = null;
+    function watchPaymentMethods() {
+      if(paymentMethodsUnsubscribe) paymentMethodsUnsubscribe();
+      paymentMethodsUnsubscribe=window.dbOnValue(window.dbRef(window.db,'paymentMethods'),snapshot=>{
+        activePaymentMethods=snapshot.val()||{};
+        if(!activePaymentMethods[selectedPaymentMethodId]) {selectedPaymentMethodId=null;window.checkoutRequestId=null;}
+        renderPaymentMethods();
+      },error=>{
+        activePaymentMethods={};selectedPaymentMethodId=null;renderPaymentMethods();
+        document.getElementById('paymentMethodsList').textContent=error.message;
+      });
+    }
+    function renderPaymentMethods() {
+      const list=document.getElementById('paymentMethodsList');list.replaceChildren();
+      for(const [id,method] of Object.entries(activePaymentMethods)) {
+        const button=document.createElement('button');button.type='button';button.className='pm-choice'+(id===selectedPaymentMethodId?' selected':'');
+        button.setAttribute('aria-pressed',String(id===selectedPaymentMethodId));
+        if(method.logo){const image=document.createElement('img');image.src=method.logo;image.alt='';image.className='pm-logo';image.onerror=()=>image.remove();button.append(image);}
+        const name=document.createElement('span');name.textContent=method.name;button.append(name);
+        button.onclick=()=>{selectedPaymentMethodId=id;window.checkoutRequestId=null;renderPaymentMethods();};list.append(button);
+      }
+      if(!Object.keys(activePaymentMethods).length)list.textContent='No payment methods are available right now. Please contact support.';
+      const method=activePaymentMethods[selectedPaymentMethodId];
+      document.getElementById('paymentMethodDetails').hidden=!method;
+      document.getElementById('confirmPaymentBtn').disabled=!method;
+      if(!method)return;
+      document.getElementById('paymentMethodName').textContent=method.name;
+      document.getElementById('paymentReceiver').textContent=method.account;
+      document.getElementById('paymentInstructions').textContent=method.instructions || 'Send payment to the receiving details above, then enter your transaction ID.';
+      const total=window.cart.reduce((sum,item)=>sum+parseFloat(item.price),0)+(window.appliedCoupon?window.appliedCoupon.discount:0);
+      document.getElementById('methodPayable').textContent=(total*method.rate).toFixed(2)+' '+method.currency;
+      document.getElementById('paidCurrency').textContent=method.currency;
+      const qr=document.getElementById('paymentMethodQr');qr.hidden=!method.qrUrl;
+      if(method.qrUrl)qr.src=method.qrUrl;else qr.removeAttribute('src');
+    }
+    async function copyPaymentReceiver() {
+      const method=activePaymentMethods[selectedPaymentMethodId];if(!method)return;
+      try {await navigator.clipboard.writeText(method.account);showNotification('Receiving details copied.','success');}
+      catch(e) {showNotification('Please copy the receiving details manually.','error');}
+    }
+
     // Proceed to payment
     function proceedToPayment() {
       if (window.cart.length === 0) {
@@ -3872,6 +3946,8 @@ function applyFilter(products, filter) {
       const total = subtotal + discount;
 
       document.getElementById('paymentAmount').textContent = formatCurrency(total);
+      watchPaymentMethods();
+      renderPaymentMethods();
 
       closeModal('checkoutModal');
       
@@ -3882,7 +3958,9 @@ function applyFilter(products, filter) {
     }
 
     // Confirm purchase
+    let confirmingPayment = false;
     async function confirmPurchase() {
+      if (!activePaymentMethods[selectedPaymentMethodId]) {showNotification('Select an available payment method.', 'error');return;}
       const userAmount = document.getElementById('userAmount').value.trim();
       const utrId = document.getElementById('utrId').value.trim();
 
@@ -3903,17 +3981,19 @@ function applyFilter(products, filter) {
         return;
       }
 
-      if (utrId.length < 10 || utrId.length > 16) {
-        showNotification('UTR ID must be between 10 and 16 characters', 'error');
+      if (utrId.length < 4 || utrId.length > 128) {
+        showNotification('Transaction ID must be between 4 and 128 characters', 'error');
         return;
       }
 
-      if (!/^[a-zA-Z0-9]+$/.test(utrId)) {
-        showNotification('UTR ID must contain only letters and numbers', 'error');
+      if (!/^[a-zA-Z0-9_-]+$/.test(utrId)) {
+        showNotification('Transaction ID may contain letters, numbers, hyphens and underscores', 'error');
         return;
       }
 
       try {
+        if(confirmingPayment)return;
+        confirmingPayment=true;document.getElementById('confirmPaymentBtn').disabled=true;
         showLoading('Processing your order...');
 
         // Calculate totals
@@ -3925,7 +4005,7 @@ function applyFilter(products, filter) {
         await window.Ariyan.api('checkout', {
           requestId: window.checkoutRequestId,
           items: window.cart.map(item => ({id:item.id})),
-          amountPaid, utrId,
+          amountPaid, utrId, paymentMethodId: selectedPaymentMethodId,
           couponCode: window.appliedCoupon ? window.appliedCoupon.code : null
         });
         window.checkoutRequestId = null;
@@ -3951,8 +4031,12 @@ function applyFilter(products, filter) {
 
       } catch (error) {
         hideLoading();
+        if(error.code && error.code.startsWith('payment/')) window.checkoutRequestId=null;
         console.error('Error placing order:', error);
         showNotification('Failed to place order: ' + error.message, 'error');
+      } finally {
+        confirmingPayment=false;
+        document.getElementById('confirmPaymentBtn').disabled=!activePaymentMethods[selectedPaymentMethodId];
       }
     }
 
@@ -4158,7 +4242,8 @@ function applyFilter(products, filter) {
         </div>
         <div class="order-footer">
           <div class="order-utr">
-            <strong>UTR ID:</strong> ${escapeHtml(order.userInput?.utrId || 'N/A')}
+            ${order.paymentMethod ? `<div><strong>Method:</strong> ${escapeHtml(order.paymentMethod.name)} · ${escapeHtml(String(order.amountPaid))} ${escapeHtml(order.paymentMethod.currency)}</div>` : ''}
+            <strong>Transaction ID:</strong> ${escapeHtml(order.userInput?.utrId || 'N/A')}
           </div>
           <div style="font-size: 12px; color: #999;">
             <i class="fas fa-user"></i> ${escapeHtml(order.userInput?.name || 'N/A')}
@@ -7241,6 +7326,30 @@ ADMIN_HTML = r"""<!DOCTYPE html>
         opacity: 0.5;
       }
     }
+    .pm-muted {color:#aaa9bf;font-size:13px;line-height:1.6;margin:10px 0;display:block;}
+    .pm-presets {display:flex;gap:10px;flex-wrap:wrap;margin:16px 0;}
+    .pm-presets .btn {width:auto;flex:1;min-width:100px;padding:12px;}
+    .pm-admin-list {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:16px;}
+    .pm-admin-card,.pm-details {padding:20px;border:1px solid #ffffff25;border-radius:18px;background:#0c0a20a6;margin:12px 0;}
+    .pm-method-heading {display:flex;align-items:center;gap:14px;}
+    .pm-logo {height:48px;width:48px;object-fit:contain;background:white;padding:4px;border-radius:12px;flex-shrink:0;}
+    .pm-account {overflow-wrap:anywhere;white-space:pre-wrap;line-height:1.6;}
+    .pm-form-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}
+    .pm-form-grid select {width:100%;padding:14px;background:#191128;color:#fff;border:1px solid #ffffff35;border-radius:12px;}
+    .pm-logo-preview {display:flex;align-items:center;gap:12px;margin:12px 0;}
+    .pm-logo-preview img {width:72px;height:72px;object-fit:contain;background:white;border-radius:12px;}
+    .pm-toggle {display:flex;gap:12px;align-items:center;margin:20px 0;cursor:pointer;}
+    .pm-toggle input {width:22px;height:22px;accent-color:#00dfae;}
+    .pm-choice-list {display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:18px 0;}
+    .pm-choice {display:flex;align-items:center;justify-content:center;gap:10px;flex-direction:column;padding:16px 10px;background:#1e1433;color:white;border:2px solid #ffffff25;border-radius:16px;font-size:15px;font-weight:700;cursor:pointer;transition:transform .2s,border-color .2s;}
+    .pm-choice:hover {transform:translateY(-2px);border-color:#a855f7;}
+    .pm-choice.selected {border-color:#00e5cc;box-shadow:0 0 18px #00e5cc25;background:#123333;}
+    .pm-choice:focus-visible {outline:3px solid white;outline-offset:3px;}
+    #methodPayable {font-size:26px;color:#00ffc3;display:block;margin:16px 0;font-weight:800;}
+    #paymentInstructions {white-space:pre-wrap;overflow-wrap:anywhere;}
+    #confirmPaymentBtn:disabled {opacity:.45;cursor:not-allowed;}
+    .pm-details[hidden],#paymentMethodQr[hidden] {display:none!important;}
+    @media(max-width:540px){.pm-form-grid{grid-template-columns:1fr;gap:0}.pm-details{padding:16px}.pm-choice-list{grid-template-columns:repeat(3,minmax(0,1fr))}.pm-choice{font-size:13px;overflow-wrap:anywhere;}}
   </style>
 </head>
 <body>
@@ -7290,6 +7399,7 @@ ADMIN_HTML = r"""<!DOCTYPE html>
         <span class="drawer-nav-icon"><i class="fas fa-phone"></i></span>
         <span>Contact Settings</span>
       </div>
+      <div class="drawer-nav-item" data-tab="payments"><i class="fas fa-wallet"></i><span>Payment Methods</span></div>
       <div class="drawer-nav-item" data-tab="products">
         <span class="drawer-nav-icon"><i class="fas fa-box"></i></span>
         <span>Products</span>
@@ -7452,6 +7562,36 @@ ADMIN_HTML = r"""<!DOCTYPE html>
           <input type="url" id="contactTelegram" placeholder="https://t.me/channel">
         </div>
         <button class="btn" id="saveContactBtn"><i class="fas fa-save"></i> Save Contact Settings</button>
+      </div>
+    </div>
+
+    <div id="paymentsTab" class="tab-content">
+      <div class="card">
+        <h2 class="card-title"><i class="fas fa-wallet"></i> Payment Methods</h2>
+        <p class="pm-muted">Set your receiving details, then switch a method on to show it at checkout.</p>
+        <div class="pm-presets">
+          <button class="btn btn-secondary" onclick="newPaymentMethod('bKash')">+ bKash</button>
+          <button class="btn btn-secondary" onclick="newPaymentMethod('Nagad')">+ Nagad</button>
+          <button class="btn btn-secondary" onclick="newPaymentMethod('Binance')">+ Binance</button>
+          <button class="btn btn-secondary" onclick="newPaymentMethod('')">+ Custom</button>
+        </div>
+        <div id="paymentMethodsAdminList" class="pm-admin-list"></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title" id="pmFormTitle">Add / Edit Payment Method</h2>
+        <input type="hidden" id="pmEditId">
+        <div class="input-group"><label for="pmName">Method name</label><input id="pmName" maxlength="60" placeholder="bKash / Nagad / Binance"></div>
+        <div class="input-group"><label for="pmAccount">Receiving number / Binance Pay ID / wallet address</label><input id="pmAccount" maxlength="250" placeholder="Your payment receiving details"></div>
+        <div class="pm-form-grid">
+          <div class="input-group"><label for="pmCurrency">Payment currency</label><select id="pmCurrency"><option value="BDT">BDT (Taka)</option><option value="USDT">USDT</option><option value="USD">USD</option></select></div>
+          <div class="input-group"><label for="pmRate">Payment currency units per 1 USDT</label><input id="pmRate" type="number" min="0.000001" step="any" placeholder="Set your conversion rate"><small class="pm-muted">Store prices use USDT ($). Use 1 for USDT.</small></div>
+        </div>
+        <div class="input-group"><label for="pmInstructions">Payment instructions</label><textarea id="pmInstructions" maxlength="2000" placeholder="Send Money / Cash In, account name, or Binance network and memo if needed"></textarea></div>
+        <div class="input-group"><label for="pmLogoUrl">Logo image link</label><input id="pmLogoUrl" type="url" placeholder="https://example.com/logo.png"><small class="pm-muted">Or upload a PNG, JPG, WEBP or GIF (up to 500 KB).</small><input id="pmLogoFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif"><div class="pm-logo-preview"><img id="pmLogoPreview" alt="Logo preview" hidden><button class="btn btn-secondary" type="button" onclick="clearPaymentLogo()">Remove logo</button></div></div>
+        <div class="input-group"><label for="pmQrUrl">Payment QR image link (optional)</label><input id="pmQrUrl" type="url" placeholder="https://example.com/payment-qr.png"></div>
+        <label class="pm-toggle"><input type="checkbox" id="pmActive"> Enabled — show this method at checkout</label>
+        <div class="btn-group"><button class="btn" id="pmSaveBtn" onclick="savePaymentMethod()"><i class="fas fa-save"></i> Save Method</button><button class="btn btn-secondary" onclick="newPaymentMethod('')">Clear Form</button></div>
+        <div id="pmMessage" role="status" class="pm-muted"></div>
       </div>
     </div>
 
@@ -8013,6 +8153,7 @@ ADMIN_HTML = r"""<!DOCTYPE html>
       });
 
       tabContent.classList.add('active');
+      if(tabName === 'payments') loadPaymentMethodsAdmin();
 
       document.querySelectorAll('.drawer-nav-item').forEach(item => {
         item.classList.remove('active');
@@ -8164,6 +8305,88 @@ ADMIN_HTML = r"""<!DOCTYPE html>
         console.error('Error updating stats:', error);
       }
     }
+
+    let paymentMethodsAdmin = {};
+    let paymentLogoValue = '';
+    async function loadPaymentMethodsAdmin() {
+      const container = document.getElementById('paymentMethodsAdminList');
+      try {
+        const snapshot = await window.dbGet(window.dbRef(window.db, 'paymentMethods'));
+        paymentMethodsAdmin = snapshot.val() || {};
+        container.replaceChildren();
+        for (const [id, method] of Object.entries(paymentMethodsAdmin)) {
+          const card = document.createElement('div'); card.className = 'pm-admin-card';
+          const heading = document.createElement('div'); heading.className = 'pm-method-heading';
+          if(method.logo) {const img=document.createElement('img');img.src=method.logo;img.alt=method.name;img.className='pm-logo';img.onerror=()=>img.remove();heading.append(img);}
+          const text = document.createElement('div');
+          const title=document.createElement('strong');title.textContent=method.name;
+          const status=document.createElement('div');status.className='pm-muted';status.textContent=method.isActive ? 'ON · Available at checkout' : 'OFF · Hidden at checkout';
+          text.append(title,status);heading.append(text);card.append(heading);
+          const account=document.createElement('p');account.className='pm-account';account.textContent=method.account || 'Add receiving details before enabling';card.append(account);
+          const actions=document.createElement('div');actions.className='pm-presets';
+          for(const [label,action] of [['Edit',()=>editPaymentMethod(id)],[method.isActive?'Turn Off':'Turn On',()=>togglePaymentMethod(id)],['Remove',()=>removePaymentMethod(id)]]) {
+            const btn=document.createElement('button');btn.className='btn btn-secondary';btn.textContent=label;btn.onclick=action;actions.append(btn);
+          }
+          card.append(actions);container.append(card);
+        }
+        if(!Object.keys(paymentMethodsAdmin).length) container.textContent='No methods yet. Add one using the buttons above.';
+      } catch(e) {container.textContent=e.message;}
+    }
+    function paymentFormMessage(message) {document.getElementById('pmMessage').textContent=message;}
+    function previewPaymentLogo() {
+      const image=document.getElementById('pmLogoPreview');image.hidden=!paymentLogoValue;
+      if(paymentLogoValue) image.src=paymentLogoValue;else image.removeAttribute('src');
+    }
+    function clearPaymentLogo() {
+      paymentLogoValue='';document.getElementById('pmLogoUrl').value='';document.getElementById('pmLogoFile').value='';previewPaymentLogo();
+    }
+    function newPaymentMethod(name) {
+      document.getElementById('pmEditId').value='';document.getElementById('pmName').value=name;
+      document.getElementById('pmAccount').value='';document.getElementById('pmInstructions').value='';
+      document.getElementById('pmQrUrl').value='';document.getElementById('pmActive').checked=false;
+      document.getElementById('pmCurrency').value=name==='Binance'?'USDT':'BDT';
+      document.getElementById('pmRate').value=name==='Binance'?'1':'';
+      document.getElementById('pmFormTitle').textContent='Add Payment Method';clearPaymentLogo();paymentFormMessage('');
+    }
+    function editPaymentMethod(id) {
+      const m=paymentMethodsAdmin[id];if(!m)return;
+      document.getElementById('pmEditId').value=id;document.getElementById('pmName').value=m.name;
+      document.getElementById('pmAccount').value=m.account||'';document.getElementById('pmCurrency').value=m.currency||'USDT';
+      document.getElementById('pmRate').value=m.rate||'';document.getElementById('pmInstructions').value=m.instructions||'';
+      document.getElementById('pmQrUrl').value=m.qrUrl||'';document.getElementById('pmActive').checked=!!m.isActive;
+      paymentLogoValue=m.logo||'';document.getElementById('pmLogoUrl').value=paymentLogoValue.startsWith('data:')?'':paymentLogoValue;
+      document.getElementById('pmLogoFile').value='';previewPaymentLogo();paymentFormMessage('');
+      document.getElementById('pmFormTitle').textContent='Edit '+m.name;
+      document.getElementById('pmFormTitle').scrollIntoView({behavior:'smooth',block:'start'});
+    }
+    async function savePaymentMethod() {
+      const button=document.getElementById('pmSaveBtn');button.disabled=true;paymentFormMessage('Saving...');
+      try {
+        const id=document.getElementById('pmEditId').value || crypto.randomUUID().replaceAll('-','');
+        const value={name:document.getElementById('pmName').value.trim(),account:document.getElementById('pmAccount').value.trim(),currency:document.getElementById('pmCurrency').value,rate:Number(document.getElementById('pmRate').value),instructions:document.getElementById('pmInstructions').value.trim(),logo:paymentLogoValue,qrUrl:document.getElementById('pmQrUrl').value.trim(),isActive:document.getElementById('pmActive').checked};
+        await window.dbSet(window.dbRef(window.db,'paymentMethods/'+id),value);
+        document.getElementById('pmEditId').value=id;await loadPaymentMethodsAdmin();paymentFormMessage('Payment method saved.');
+      } catch(e) {paymentFormMessage(e.message);} finally {button.disabled=false;}
+    }
+    async function togglePaymentMethod(id) {
+      try {await window.dbUpdate(window.dbRef(window.db,'paymentMethods/'+id),{isActive:!paymentMethodsAdmin[id].isActive});await loadPaymentMethodsAdmin();}
+      catch(e) {alert(e.message);}
+    }
+    async function removePaymentMethod(id) {
+      if(!confirm('Remove '+paymentMethodsAdmin[id].name+'? It will no longer appear at checkout.'))return;
+      try {await window.dbRemove(window.dbRef(window.db,'paymentMethods/'+id));if(document.getElementById('pmEditId').value===id)newPaymentMethod('');await loadPaymentMethodsAdmin();}
+      catch(e) {alert(e.message);}
+    }
+    document.getElementById('pmLogoUrl').addEventListener('input',e=>{
+      paymentLogoValue=e.target.value.trim();document.getElementById('pmLogoFile').value='';previewPaymentLogo();
+    });
+    document.getElementById('pmLogoFile').addEventListener('change',async e=>{
+      const file=e.target.files[0];if(!file)return;
+      if(!['image/png','image/jpeg','image/webp','image/gif'].includes(file.type)||file.size>500*1024) {paymentFormMessage('Choose a PNG, JPG, WEBP or GIF up to 500 KB.');e.target.value='';return;}
+      const button=document.getElementById('pmSaveBtn');button.disabled=true;
+      try {paymentLogoValue=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('Image could not be read.'));reader.readAsDataURL(file);});document.getElementById('pmLogoUrl').value='';previewPaymentLogo();paymentFormMessage('Logo ready. Click Save Method to apply.');}
+      catch(error){paymentFormMessage(error.message);}finally{button.disabled=false;}
+    });
 
     async function loadBrandSettings() {
       try {
@@ -8826,7 +9049,8 @@ ADMIN_HTML = r"""<!DOCTYPE html>
         <div class="order-info">
           <div><span class="order-field">Product:</span> <span class="order-value">${escapeHtml(order.productSnapshot?.title || 'N/A')}</span></div>
           <div><span class="order-field">Customer:</span> <span class="order-value">${escapeHtml(order.userInput?.name || 'N/A')}</span></div>
-          <div><span class="order-field">UTR ID:</span> <span class="order-value">${escapeHtml(order.userInput?.utrId || 'N/A')}</span></div>
+          ${order.paymentMethod ? `<div><span class="order-field">Payment Method:</span> <span class="order-value">${escapeHtml(order.paymentMethod.name)}</span></div><div><span class="order-field">Paid:</span> <span class="order-value">${escapeHtml(String(order.amountPaid))} ${escapeHtml(order.paymentMethod.currency)}</span></div><div><span class="order-field">Receiving Account:</span> <span class="order-value">${escapeHtml(order.paymentMethod.account)}</span></div><div><span class="order-field">Expected Payment:</span> <span class="order-value">${escapeHtml(String(order.paymentMethod.expectedAmount))} ${escapeHtml(order.paymentMethod.currency)}</span></div>` : ''}
+          <div><span class="order-field">Transaction ID:</span> <span class="order-value">${escapeHtml(order.userInput?.utrId || 'N/A')}</span></div>
           <div><span class="order-field">Price:</span> <span class="order-value" style="color: #00ff88;">${formatCurrency(order.finalAmount || order.productSnapshot?.discountedPrice || 0)}</span></div>
           ${order.couponUsed ? `<div><span class="order-field">Coupon:</span> <span class="order-value" style="color: #ffa500;">${escapeHtml(order.couponUsed)} (+${formatCurrency(order.discountAmount || 0)})</span></div>` : ''}
         </div>
@@ -10070,6 +10294,8 @@ CLIENT_JS = r"""(() => {
 """
 
 import argparse
+import base64
+import binascii
 import hashlib
 import hmac
 import json
@@ -10093,7 +10319,7 @@ app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024
 _DB = None
 _DB_LOCK = threading.Lock()
-ROOTS = {'products', 'orders', 'coupons', 'users', 'chats', 'meta', 'gamePlays'}
+ROOTS = {'products', 'orders', 'coupons', 'users', 'chats', 'meta', 'gamePlays', 'paymentMethods'}
 ID_PATTERN = re.compile(r'^[A-Za-z0-9_-]{1,100}$')
 
 
@@ -10129,6 +10355,7 @@ def database():
             db.sessions.create_index('expiresAt', expireAfterSeconds=0)
             db.login_limits.create_index('expiresAt', expireAfterSeconds=0)
             db.orders.create_index([('value.userId', 1), ('value.status', 1), ('value.productId', 1)])
+            seed_payment_methods(db)
             _DB = db
     return _DB
 
@@ -10396,7 +10623,7 @@ def write_value(parts,op,value):
 def authorize_read(parts,user):
     root=parts[0];admin=user and user['role']=='admin'
     if admin: return
-    if root=='products': return
+    if root in ('products','paymentMethods'): return
     if root=='meta' and len(parts)>=2 and parts[1] in ('brand','contact'): return
     if not user: raise APIError('Please log in.',401,'auth/required')
     if root=='coupons': return
@@ -10456,7 +10683,9 @@ def data_api():
     data=payload();parts=path_parts(data.get('path'));op=data.get('op');user=identity()
     if op=='get':
         authorize_read(parts,user)
-        if parts[0]=='products' and not (user and user['role']=='admin'):
+        if parts[0]=='paymentMethods' and not (user and user['role']=='admin'):
+            value=read_public_payment_methods(parts)
+        elif parts[0]=='products' and not (user and user['role']=='admin'):
             value=filtered_products(parts,user)
         elif parts[0]=='users' and len(parts)>=3 and parts[2]=='purchases':
             value=user_purchases(parts[1])
@@ -10471,12 +10700,85 @@ def data_api():
     if op not in ('set','update','remove'): raise APIError('Unknown operation.')
     if not user: raise APIError('Please log in.',401,'auth/required')
     value=data.get('value');clean_value(value)
+    if parts[0]=='paymentMethods':
+        if user['role']!='admin': raise APIError('Admin access required.',403)
+        if len(parts)!=2: raise APIError('Select an individual payment method.')
+        if op!='remove':
+            existing=read_value(parts) or {}
+            if not isinstance(value,dict): raise APIError('Invalid payment method.')
+            value=validate_payment_method({**existing,**value} if op=='update' else value)
+            op='set'
+
     value=authorize_write(parts,op,value,user)
     write_value(parts,op,value)
     if user['role']=='admin' and parts[0]=='users' and len(parts)==2 and op=='remove':
         database().accounts.delete_one({'_id':parts[1]})
         database().sessions.delete_many({'user.uid':parts[1]})
     return jsonify(ok=True)
+
+
+def seed_payment_methods(db):
+    if db.settings.find_one({'_id':'payment_methods_initialized'}):
+        return
+    for key,name,currency,rate in [('bkash','bKash','BDT',0),('nagad','Nagad','BDT',0),('binance','Binance','USDT',1)]:
+        db.paymentMethods.update_one({'_id':key},{'$setOnInsert':{'value':{'name':name,'account':'','currency':currency,'rate':rate,'instructions':'','logo':'','qrUrl':'','isActive':False,'updatedAt':stamp()}}},upsert=True)
+    db.settings.update_one({'_id':'payment_methods_initialized'},{'$set':{'done':True}},upsert=True)
+
+
+def payment_image(value, allow_upload=True):
+    if not isinstance(value,str): raise APIError('Invalid image value.')
+    if not value: return ''
+    if value.startswith('data:') and allow_upload:
+        match=re.fullmatch(r'data:image/(png|jpeg|webp|gif);base64,([A-Za-z0-9+/=]+)',value)
+        if not match: raise APIError('Upload a PNG, JPG, WEBP or GIF image.')
+        try: raw=base64.b64decode(match[2],validate=True)
+        except (ValueError,binascii.Error): raise APIError('Invalid image file.')
+        if not raw or len(raw)>500*1024: raise APIError('Logo must be at most 500 KB.')
+        kind=match[1]
+        valid=(kind=='png' and raw.startswith(b'\x89PNG\r\n\x1a\n') or kind=='jpeg' and raw.startswith(b'\xff\xd8\xff') or kind=='gif' and raw.startswith((b'GIF87a',b'GIF89a')) or kind=='webp' and raw.startswith(b'RIFF') and raw[8:12]==b'WEBP')
+        if not valid: raise APIError('Image contents do not match the image type.')
+        return value
+    try:
+        url=urlsplit(value)
+        if len(value)>2048 or url.scheme not in ('https','http') or not url.hostname or url.username or url.password:
+            raise ValueError()
+    except ValueError: raise APIError('Image link must be a valid http:// or https:// URL.')
+    return value
+
+
+def validate_payment_method(value):
+    if not isinstance(value,dict): raise APIError('Invalid payment method.')
+    def text_field(key,limit,required=False):
+        v=value.get(key,'')
+        if not isinstance(v,str) or len(v)>limit or (required and not v.strip()):
+            raise APIError('Enter a valid '+key+'.')
+        return v.strip()
+    method={'name':text_field('name',60,True),'account':text_field('account',250),
+            'instructions':text_field('instructions',2000),'currency':value.get('currency','USDT'),
+            'rate':number(value.get('rate',0)), 'logo':payment_image(value.get('logo','')),
+            'qrUrl':payment_image(value.get('qrUrl',''),False),'isActive':value.get('isActive',False),'updatedAt':stamp()}
+    if method['currency'] not in ('BDT','USD','USDT'): raise APIError('Choose BDT, USD or USDT.')
+    if type(method['isActive']) is not bool: raise APIError('Enabled must be on or off.')
+    if method['isActive'] and (not method['account'] or not 0<method['rate']<=1000000):
+        raise APIError('Set receiving details and a valid conversion rate before turning this method on.')
+    return method
+
+
+def read_public_payment_methods(parts):
+    methods={d['_id']:d['value'] for d in database().paymentMethods.find({'value.isActive':True})}
+    if len(parts)==1: return methods or None
+    value=methods.get(parts[1])
+    for key in parts[2:]: value=value.get(key) if isinstance(value,dict) else None
+    return value
+
+
+def checkout_payment_method(method_id):
+    if not isinstance(method_id,str) or not ID_PATTERN.fullmatch(method_id):
+        raise APIError('Select a payment method.',400,'payment/required')
+    method=read_value(['paymentMethods',method_id])
+    if not method or method.get('isActive') is not True:
+        raise APIError('This payment method is no longer available. Contact support if you already paid.',409,'payment/unavailable')
+    return validate_payment_method(method)
 
 
 def number(value):
@@ -10495,9 +10797,11 @@ def checkout():
     checkout_id=user['uid']+'_'+reqid
     db=database();plan=db.checkouts.find_one({'_id':checkout_id})
     if not plan:
+        method_id=data.get('paymentMethodId')
+        method=checkout_payment_method(method_id)
         items=data.get('items');utr=data.get('utrId');paid=number(data.get('amountPaid'))
         if not isinstance(items,list) or not 1<=len(items)<=100 or paid<=0: raise APIError('Invalid cart or payment amount.')
-        if not isinstance(utr,str) or not re.fullmatch(r'[A-Za-z0-9]{10,16}',utr): raise APIError('UTR ID must have 10 to 16 letters or numbers.')
+        if not isinstance(utr,str) or not re.fullmatch(r'[A-Za-z0-9_-]{4,128}',utr): raise APIError('Transaction ID must have 4 to 128 letters, numbers, hyphens or underscores.')
         products=[]
         for item in items:
             pid=item.get('id') if isinstance(item,dict) else None
@@ -10519,15 +10823,21 @@ def checkout():
                 adjustment=subtotal*adjustment/100
                 maximum=number(c.get('maxDiscount',0))
                 if maximum: adjustment=min(adjustment,maximum)
+        method_snapshot={'id':method_id,'name':method['name'],'account':method['account'],'currency':method['currency'],'rate':method['rate'],'expectedAmount':round((subtotal+adjustment)*method['rate'],2)}
         orders={}
         for i,(pid,product,price) in enumerate(products):
             oid=user['uid']+'_'+reqid+'_'+str(i)
-            orders[oid]={'productId':pid,'amountPaid':paid,'productSnapshot':{'title':product.get('title',''),'imageUrl':product.get('imageUrl',''),'discountedPrice':price},'userInput':{'utrId':utr,'name':user.get('displayName') or 'N/A','email':user['email'],'phone':'N/A'},'userId':user['uid'],'userEmail':user['email'],'couponUsed':code,'discountAmount':round(adjustment,2),'finalAmount':round(subtotal+adjustment,2),'status':'pending','createdAt':stamp()}
+            orders[oid]={'productId':pid,'paymentMethod':method_snapshot,'amountPaid':paid,'productSnapshot':{'title':product.get('title',''),'imageUrl':product.get('imageUrl',''),'discountedPrice':price},'userInput':{'utrId':utr,'name':user.get('displayName') or 'N/A','email':user['email'],'phone':'N/A'},'userId':user['uid'],'userEmail':user['email'],'couponUsed':code,'discountAmount':round(adjustment,2),'finalAmount':round(subtotal+adjustment,2),'status':'pending','createdAt':stamp()}
         # Keep the supplied shop's additive coupon calculation; amounts are computed on the server.
         plan={'_id':checkout_id,'orders':orders,'couponId':coupon['_id'] if coupon else None,'couponLimit':int(coupon['value'].get('usageLimit',0) or 0) if coupon else 0,'createdAt':stamp()}
         try: db.checkouts.insert_one(plan)
         except DuplicateKeyError: plan=db.checkouts.find_one({'_id':checkout_id})
     if plan.get('completed'): return jsonify(ok=True,orderIds=list(plan['orders']))
+    saved_method=next(iter(plan['orders'].values())).get('paymentMethod')
+    if not saved_method: raise APIError('Please select a payment method and submit a new checkout.',409,'payment/required')
+    current_method=checkout_payment_method(saved_method['id'])
+    if any(current_method[k]!=saved_method[k] for k in ('account','currency','rate')):
+        raise APIError('Payment details changed. Contact support if you already paid.',409,'payment/unavailable')
     if plan.get('couponId'):
         condition={'_id':plan['couponId'],'redeemed':{'$ne':checkout_id}}
         if plan['couponLimit']>0:
