@@ -1,39 +1,14 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-bot.py — ekta matro file, shob kichu er moddhe
-=================================================
-
-Premium Store (user.html) + Premium Admin Panel (admin.html) + payment-method
-config ekta single Python file. Kono dependency nei, kono folder/requirements
-nei — stdlib er `http.server` diyei serve kore. Railway te direct cholbe.
-
-    Railway : PORT theke shone (na thakle 8080), host 0.0.0.0
-    Local   : python3 bot.py            (http://127.0.0.1:8080)
-
-Routes
-    /            landing (store / admin links)
-    /user.html   customer store
-    /admin.html  admin panel
-    /shop, /store, /app     -> /user.html
-    /admin, /panel          -> /admin.html
-    /health, /healthz       -> {"status":"ok", ...}   (Railway health check)
-
-Data path ta age-r motoi: browser -> Firebase Realtime Database (direct).
-Ei file shudhu page serve kore, kono secret er dorkar nei. Payment method
-gulo admin theke `meta/paymentMethods` e save hoy, checkout seta pore.
-"""
+"""Single-file premium store + admin panel server (stdlib only)."""
 
 import os
 import sys
 import json
+import gzip
+import zlib
 import signal
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from datetime import datetime, timezone
 
-# --------------------------------------------------------------------------
-# config
-# --------------------------------------------------------------------------
 PORT = int(os.environ.get("PORT") or os.environ.get("WEB_PORT") or 8080)
 HOST = os.environ.get("HOST", "0.0.0.0")
 
@@ -66,25 +41,53 @@ def page_landing():
     return LANDING_HTML
 
 
-# --------------------------------------------------------------------------
-# server
-# --------------------------------------------------------------------------
+_PAGE_CACHE = {}
+
+
+def _page_payload(name, html):
+    """Build and cache (plain, gzip, etag) payloads once."""
+    entry = _PAGE_CACHE.get(name)
+    if entry is None:
+        plain = html.encode("utf-8")
+        gz = gzip.compress(plain, 6)
+        etag = '"%s-%s"' % (len(plain), zlib.crc32(plain) & 0xFFFFFFFF)
+        entry = _PAGE_CACHE[name] = (plain, gz, etag)
+    return entry
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "PremiumStoreBot/1.0"
     protocol_version = "HTTP/1.1"
 
-    # --- helpers ----------------------------------------------------------
     def _body(self, html):
         return html.encode("utf-8")
 
-    def _send(self, code, body, ctype="text/html; charset=utf-8", extra=None):
+    def _send(self, code, body, ctype="text/html; charset=utf-8", extra=None,
+              etag=None, precompressed=None):
         if isinstance(body, str):
             body = body.encode("utf-8")
+        headers = dict(extra or {})
+        if etag:
+            headers.setdefault("ETag", etag)
+            headers.setdefault("Vary", "Accept-Encoding")
+            if self.headers.get("If-None-Match") == etag:
+                self.send_response(304)
+                self.send_header("ETag", etag)
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                return
+        accept_enc = (self.headers.get("Accept-Encoding") or "").lower()
+        if precompressed is not None and "gzip" in accept_enc:
+            body = precompressed
+            headers.setdefault("Content-Encoding", "gzip")
+        elif "gzip" in accept_enc and len(body) > 1024 and "gzip" not in ctype:
+            body = gzip.compress(body, 6)
+            headers.setdefault("Content-Encoding", "gzip")
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-cache")
-        for k, v in (extra or {}).items():
+        for k, v in headers.items():
             self.send_header(k, v)
         self.end_headers()
         if self.command != "HEAD":
@@ -93,11 +96,11 @@ class Handler(BaseHTTPRequestHandler):
     def _not_found(self):
         self._send(404, "<h1>404</h1><p><a href='/'>back</a></p>")
 
-    # --- routes -----------------------------------------------------------
     def route(self, want_head=False):
         path = self.path.split("?", 1)[0]
         if path in ("/", "/index.html", "/index"):
-            return self._send(200, LANDING_HTML)
+            plain, gz, etag = _page_payload("landing", LANDING_HTML)
+            return self._send(200, plain, etag=etag, precompressed=gz)
         if path in ("/health", "/healthz", "/health.json"):
             payload = {
                 "status": "ok",
@@ -116,7 +119,8 @@ class Handler(BaseHTTPRequestHandler):
         if path in PAGES:
             name, ctype = PAGES[path]
             html = USER_HTML if name == "store" else ADMIN_HTML
-            return self._send(200, html, ctype)
+            plain, gz, etag = _page_payload(name, html)
+            return self._send(200, plain, ctype, etag=etag, precompressed=gz)
         return self._not_found()
 
     def do_GET(self):
@@ -162,16 +166,17 @@ def main():
     return 0
 
 
-# ==========================================================================
-# EMBEDDED PAGES  (pure static HTML+JS, Firebase thekei data ney)
-# ==========================================================================
 USER_HTML = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Shop - Premium Store</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="dns-prefetch" href="https://cipher-pro-store-default-rtdb.firebaseio.com">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
   <style>
     * {
       margin: 0;
@@ -2624,6 +2629,18 @@ USER_HTML = r"""<!DOCTYPE html>
     .pm-copy:hover { background: rgba(0,255,255,.22); }
     .pm-info { color: #94a3b8; font-size: 12.5px; line-height: 1.6; margin: 6px 0 0; text-align: left; }
     .pm-empty { color: #ff9f43; font-size: 13px; line-height: 1.6; padding: 14px 4px; }
+  
+    @media (max-width: 768px) {
+      .product-card, .order-card, .stat-card, .contact-card, .accordion-item {
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        background: rgba(255, 255, 255, 0.07);
+      }
+      .header { backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+      .search-bar { backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+      .cart-sidebar, .sidebar { will-change: transform; }
+      .product-card { transition: transform 0.25s ease, box-shadow 0.25s ease; }
+    }
   </style>
 </head>
 <body>
@@ -3739,7 +3756,7 @@ function applyFilter(products, filter) {
         const cartItem = document.createElement('div');
         cartItem.className = 'cart-item';
         cartItem.innerHTML = `
-          <img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.title)}" class="cart-item-image"
+          <img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.title)}" class="cart-item-image" loading="lazy" decoding="async"
                onerror="this.src='https://via.placeholder.com/80/1a0a2e/00ffff?text=No+Image'">
           <div class="cart-item-details">
             <div class="cart-item-title">${escapeHtml(item.title)}</div>
@@ -3892,7 +3909,7 @@ function applyFilter(products, filter) {
         const itemDiv = document.createElement('div');
         itemDiv.className = 'cart-item';
         itemDiv.innerHTML = `
-          <img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.title)}" class="cart-item-image"
+          <img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.title)}" class="cart-item-image" loading="lazy" decoding="async"
                onerror="this.src='https://via.placeholder.com/80/1a0a2e/00ffff?text=No+Image'">
           <div class="cart-item-details">
             <div class="cart-item-title">${escapeHtml(item.title)}</div>
@@ -4567,7 +4584,7 @@ function applyFilter(products, filter) {
         <div class="order-body">
           <img src="${escapeHtml(order.productSnapshot?.imageUrl || '')}" 
                alt="${escapeHtml(order.productSnapshot?.title || 'Product')}" 
-               class="order-image"
+               class="order-image" loading="lazy" decoding="async"
                onerror="this.src='https://via.placeholder.com/80/1a0a2e/00ffff?text=No+Image'">
           <div class="order-details">
             <div class="order-product-title">${escapeHtml(order.productSnapshot?.title || 'Product')}</div>
@@ -5702,7 +5719,11 @@ ADMIN_HTML = r"""<!DOCTYPE html>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Premium Admin Panel v3.0</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="dns-prefetch" href="https://cipher-pro-store-default-rtdb.firebaseio.com">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
   <style>
     * {
       margin: 0;
@@ -7700,6 +7721,18 @@ ADMIN_HTML = r"""<!DOCTYPE html>
     .pm-ic-opt.sel { border-color: #00ffff; color: #00ffff; }
     .pm-preview { border-radius: 12px; margin-top: 8px; max-width: 170px; display: block;
                   border: 1px solid rgba(0,255,255,.3); }
+  
+    @media (max-width: 768px) {
+      .product-card, .order-card, .stat-card, .coupon-card, .user-card,
+      .chat-user-card, .quick-action-btn {
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        background: rgba(255, 255, 255, 0.07);
+      }
+      .card { backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+      .header { backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+      .drawer { will-change: transform; }
+    }
   </style>
 </head>
 <body>
