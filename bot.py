@@ -5,7 +5,14 @@
 Run: python Ariyan.py
 User: http://127.0.0.1:8000/
 Admin: http://127.0.0.1:8000/admin
-Optional: python Ariyan.py --host 0.0.0.0 --port 8080
+Railway Start Command: python Ariyan.py
+Railway/Python hosts: put a requirements.txt containing only a comment beside this file
+to enable Python detection. No third-party dependencies are required.
+Default bind: 0.0.0.0; PORT is read from the environment (fallback: 8000).
+Local-only option: python Ariyan.py --host 127.0.0.1
+Optional custom port: python Ariyan.py --port 8080
+Health check path: /healthz
+Domain target ports must match the listening port printed at startup.
 No pip packages or separate HTML files are required.
 The original Firebase backend and external assets still require internet.
 HTML, CSS, JavaScript, configuration and existing behavior are preserved.
@@ -10259,12 +10266,16 @@ class AriyanHandler(BaseHTTPRequestHandler):
     def _serve(self, send_body):
         path = urlsplit(self.path).path
         body = PAGES.get(path)
+        content_type = "text/html; charset=utf-8"
+        if path == "/healthz":
+            body = b'{"status":"ok"}'
+            content_type = "application/json; charset=utf-8"
         status = 200
         if body is None:
             status = 404
             body = b"<!doctype html><title>404</title><h1>Page not found</h1>"
         self.send_response(status)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-cache")
         self.end_headers()
@@ -10274,8 +10285,8 @@ class AriyanHandler(BaseHTTPRequestHandler):
 
 def main():
     parser = argparse.ArgumentParser(description="Run the bundled Ariyan website")
-    parser.add_argument("--host", default=os.environ.get("HOST", "127.0.0.1"))
-    parser.add_argument("--port", type=int, default=os.environ.get("PORT", "8000"))
+    parser.add_argument("--host", default=os.environ.get("ARIYAN_HOST") or "0.0.0.0")
+    parser.add_argument("--port", type=int, default=os.environ.get("PORT") or "8000")
     args = parser.parse_args()
     if not 1 <= args.port <= 65535:
         parser.error("port must be between 1 and 65535")
@@ -10283,6 +10294,7 @@ def main():
         server = ThreadingHTTPServer((args.host, args.port), AriyanHandler)
     except OSError as exc:
         parser.exit(1, f"Could not start server: {exc}\n")
+    print(f"Listening on {args.host}:{server.server_port}", flush=True)
     display_host = "127.0.0.1" if args.host == "0.0.0.0" else args.host
     print(f"User panel:  http://{display_host}:{args.port}/", flush=True)
     print(f"Admin panel: http://{display_host}:{args.port}/admin", flush=True)
