@@ -10086,12 +10086,11 @@ from flask import Flask, jsonify, request
 from pymongo import MongoClient, ReturnDocument
 from pymongo.errors import DuplicateKeyError, PyMongoError
 from waitress import serve
-from werkzeug.middleware.proxy_fix import ProxyFix
+from urllib.parse import urlsplit
 from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 _DB = None
 _DB_LOCK = threading.Lock()
 ROOTS = {'products', 'orders', 'coupons', 'users', 'chats', 'meta', 'gamePlays'}
@@ -10197,6 +10196,22 @@ def too_large(error):
     return jsonify(error='Request is too large.'), 413
 
 
+def normalize_origin(value):
+    """Compare scheme, hostname and effective port; never allow arbitrary origins."""
+    try:
+        parsed = urlsplit(value)
+        if parsed.scheme not in ('http', 'https') or not parsed.hostname:
+            return None
+        if parsed.username is not None or parsed.password is not None:
+            return None
+        if parsed.path not in ('', '/') or parsed.query or parsed.fragment:
+            return None
+        return (parsed.scheme, parsed.hostname.lower(),
+                parsed.port or (443 if parsed.scheme == 'https' else 80))
+    except (ValueError, TypeError):
+        return None
+
+
 @app.before_request
 def protect_api():
     if request.path.startswith('/api/') and request.method == 'POST':
@@ -10204,8 +10219,11 @@ def protect_api():
             raise APIError('Invalid request.', 403)
         # No cross-origin API access. The custom header also forces a CORS preflight.
         origin = request.headers.get('Origin')
-        if origin and origin != request.host_url.rstrip('/'):
-            raise APIError('Cross-origin request rejected.', 403)
+        if origin is not None:
+            actual = normalize_origin(origin)
+            expected = normalize_origin(request.host_url)
+            if actual is None or actual != expected:
+                raise APIError('Cross-origin request rejected.', 403)
 
 
 @app.after_request
@@ -10526,6 +10544,30 @@ def checkout():
     return jsonify(ok=True,orderIds=list(plan['orders']))
 
 
+def proxy_settings():
+    """Waitress handles proxy headers before Flask receives the request.
+
+    Railway routes public HTTP traffic through its edge proxy. Local/direct
+    deployments ignore forwarded headers unless ARIYAN_TRUSTED_PROXY is set
+    to their reverse proxy's address. Do not enable wildcard trust on a
+    directly exposed server.
+    """
+    railway = bool(os.environ.get('RAILWAY_PROJECT_ID') or
+                   os.environ.get('RAILWAY_SERVICE_ID'))
+    trusted = os.environ.get('ARIYAN_TRUSTED_PROXY')
+    if trusted is None and railway:
+        trusted = '*'
+    if not trusted:
+        return {}
+    return {
+        'trusted_proxy': trusted,
+        'trusted_proxy_count': 1,
+        'trusted_proxy_headers': {'x-forwarded-proto', 'x-forwarded-for'},
+        'clear_untrusted_proxy_headers': True,
+        'url_scheme': 'https' if railway else 'http',
+    }
+
+
 def main():
     parser=argparse.ArgumentParser(description='Ariyan MongoDB website')
     parser.add_argument('--host',default=os.environ.get('ARIYAN_HOST') or '0.0.0.0')
@@ -10536,7 +10578,8 @@ def main():
     print('User panel: / | Admin panel: /admin | Database health: /healthz',flush=True)
     if not MONGODB_URI:
         print('Configuration needed: edit MONGODB_URI at the top of Ariyan.py and restart. Pages load, but data and login require MongoDB.',flush=True)
-    serve(app,host=args.host,port=args.port,threads=8,channel_timeout=60)
+    serve(app,host=args.host,port=args.port,threads=8,channel_timeout=60,
+          **proxy_settings())
 
 
 if __name__=='__main__':
