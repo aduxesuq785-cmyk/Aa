@@ -1,28 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-bot.py — ekta matro file, shob kichu er moddhe
-=================================================
-
-Premium Store (user.html) + Premium Admin Panel (admin.html) + payment-method
-config ekta single Python file. Kono dependency nei, kono folder/requirements
-nei — stdlib er `http.server` diyei serve kore. Railway te direct cholbe.
-
-    Railway : PORT theke shone (na thakle 8080), host 0.0.0.0
-    Local   : python3 bot.py            (http://127.0.0.1:8080)
-
-Routes
-    /            landing (store / admin links)
-    /user.html   customer store
-    /admin.html  admin panel
-    /shop, /store, /app     -> /user.html
-    /admin, /panel          -> /admin.html
-    /health, /healthz       -> {"status":"ok", ...}   (Railway health check)
-
-Data path ta age-r motoi: browser -> Firebase Realtime Database (direct).
-Ei file shudhu page serve kore, kono secret er dorkar nei. Payment method
-gulo admin theke `meta/paymentMethods` e save hoy, checkout seta pore.
-"""
+"""Single-file premium store + admin panel server (stdlib only)."""
 
 import os
 import sys
@@ -33,9 +9,6 @@ import signal
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from datetime import datetime, timezone
 
-# --------------------------------------------------------------------------
-# config
-# --------------------------------------------------------------------------
 PORT = int(os.environ.get("PORT") or os.environ.get("WEB_PORT") or 8080)
 HOST = os.environ.get("HOST", "0.0.0.0")
 
@@ -68,16 +41,11 @@ def page_landing():
     return LANDING_HTML
 
 
-# --------------------------------------------------------------------------
-# page payload cache (mobile perf: gzip + ETag/304)
-# Ekbare compress kore cache kora hoy — porer request e CPU lagbe na.
-# Browser e gzip support thakle page ~4-5x choto hoye jay (168KB -> ~35KB).
-# --------------------------------------------------------------------------
 _PAGE_CACHE = {}
 
 
 def _page_payload(name, html):
-    """Return (plain_bytes, gzip_bytes, etag) — first call e banano, cached."""
+    """Build and cache (plain, gzip, etag) payloads once."""
     entry = _PAGE_CACHE.get(name)
     if entry is None:
         plain = html.encode("utf-8")
@@ -87,14 +55,10 @@ def _page_payload(name, html):
     return entry
 
 
-# --------------------------------------------------------------------------
-# server
-# --------------------------------------------------------------------------
 class Handler(BaseHTTPRequestHandler):
     server_version = "PremiumStoreBot/1.0"
     protocol_version = "HTTP/1.1"
 
-    # --- helpers ----------------------------------------------------------
     def _body(self, html):
         return html.encode("utf-8")
 
@@ -103,7 +67,6 @@ class Handler(BaseHTTPRequestHandler):
         if isinstance(body, str):
             body = body.encode("utf-8")
         headers = dict(extra or {})
-        # ETag match korle 304 — kono data pathate hoy na (repeat visit instant)
         if etag:
             headers.setdefault("ETag", etag)
             headers.setdefault("Vary", "Accept-Encoding")
@@ -113,7 +76,6 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Cache-Control", "no-cache")
                 self.end_headers()
                 return
-        # gzip — mobile network e data + speedsaving
         accept_enc = (self.headers.get("Accept-Encoding") or "").lower()
         if precompressed is not None and "gzip" in accept_enc:
             body = precompressed
@@ -134,7 +96,6 @@ class Handler(BaseHTTPRequestHandler):
     def _not_found(self):
         self._send(404, "<h1>404</h1><p><a href='/'>back</a></p>")
 
-    # --- routes -----------------------------------------------------------
     def route(self, want_head=False):
         path = self.path.split("?", 1)[0]
         if path in ("/", "/index.html", "/index"):
@@ -205,9 +166,6 @@ def main():
     return 0
 
 
-# ==========================================================================
-# EMBEDDED PAGES  (pure static HTML+JS, Firebase thekei data ney)
-# ==========================================================================
 USER_HTML = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2672,12 +2630,6 @@ USER_HTML = r"""<!DOCTYPE html>
     .pm-info { color: #94a3b8; font-size: 12.5px; line-height: 1.6; margin: 6px 0 0; text-align: left; }
     .pm-empty { color: #ff9f43; font-size: 13px; line-height: 1.6; padding: 14px 4px; }
   
-    /* ==========================================================
-       MOBILE PERFORMANCE PATCH
-       Sadharon phone e backdrop-filter blur scroll lag/kata kore.
-       Card gulo background nijei smooth dark gradient — blur sarano
-       dekhte prai ekdom same, kintu GPU load onek kom. Scroll smooth hobe.
-       ========================================================== */
     @media (max-width: 768px) {
       .product-card, .order-card, .stat-card, .contact-card, .accordion-item {
         backdrop-filter: none;
@@ -7770,10 +7722,6 @@ ADMIN_HTML = r"""<!DOCTYPE html>
     .pm-preview { border-radius: 12px; margin-top: 8px; max-width: 170px; display: block;
                   border: 1px solid rgba(0,255,255,.3); }
   
-    /* ==========================================================
-       MOBILE PERFORMANCE PATCH (admin)
-       List card gulo theke backdrop blur soriye GPU load komano.
-       ========================================================== */
     @media (max-width: 768px) {
       .product-card, .order-card, .stat-card, .coupon-card, .user-card,
       .chat-user-card, .quick-action-btn {
