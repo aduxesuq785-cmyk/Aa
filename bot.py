@@ -2651,7 +2651,7 @@ USER_HTML = r"""<!DOCTYPE html>
         <button class="btn btn-secondary" onclick="closeModal('checkoutModal')">
           <i class="fas fa-arrow-left"></i> Back
         </button>
-        <button class="btn" onclick="proceedToPayment()">
+        <button class="btn" id="checkoutProceedBtn" onclick="proceedToPayment()">
           <i class="fas fa-arrow-right"></i> Proceed to Pay
         </button>
       </div>
@@ -2679,7 +2679,7 @@ USER_HTML = r"""<!DOCTYPE html>
         <p id="paymentReceiver" class="pm-account"></p>
         <button class="btn btn-secondary" type="button" onclick="copyPaymentReceiver()">Copy receiving details</button>
         <strong id="methodPayable"></strong><p id="paymentRateNote" class="pm-muted"></p>
-        <img id="paymentMethodQr" class="qr-image" alt="Payment QR code" hidden>
+
         <p id="paymentInstructions" class="info-text"></p>
       </div>
 
@@ -3748,6 +3748,7 @@ function applyFilter(products, filter) {
       document.getElementById('appliedCouponDisplay').style.display = 'none';
       document.getElementById('couponInputSection').style.display = 'block';
 
+      window.checkoutRequestId=null;updateCheckoutTotals();
       document.getElementById('checkoutModal').classList.add('active');
       document.body.style.overflow = 'hidden';
     }
@@ -3843,7 +3844,7 @@ function applyFilter(products, filter) {
             <div>
               <i class="fas fa-ticket-alt"></i> 
               <span class="applied-coupon-code">${foundCoupon.code}</span>
-              <span style="color: #00ff88; margin-left: 10px;">+${formatCurrency(discountAmount)}</span>
+              <span style="color: #00ff88; margin-left: 10px;">−${formatCurrency(discountAmount)}</span>
             </div>
             <div class="applied-coupon-remove" onclick="removeCoupon()">
               <i class="fas fa-times"></i>
@@ -3881,15 +3882,23 @@ function applyFilter(products, filter) {
       }, 3000);
     }
 
+    function checkoutDue() {
+      const subtotal=window.cart.reduce((sum,item)=>sum+Number(item.price),0);
+      return Math.max(0,Math.round((subtotal-(window.appliedCoupon?window.appliedCoupon.discount:0))*100)/100);
+    }
     function updateCheckoutTotals() {
+      window.checkoutRequestId=null;
+      document.getElementById('checkoutProceedBtn').innerHTML=window.appliedCoupon && checkoutDue()===0
+        ? '<i class="fas fa-check-circle"></i> Complete'
+        : '<i class="fas fa-arrow-right"></i> Proceed to Pay';
       const subtotal = window.cart.reduce((sum, item) => sum + parseFloat(item.price), 0);
       document.getElementById('checkoutSubtotal').textContent = formatCurrency(subtotal);
 
       if (window.appliedCoupon) {
         document.getElementById('discountRow').style.display = 'flex';
-        document.getElementById('checkoutDiscount').textContent = `+${formatCurrency(window.appliedCoupon.discount)}`;
+        document.getElementById('checkoutDiscount').textContent = `−${formatCurrency(Math.min(subtotal,window.appliedCoupon.discount))}`;
         
-        const total = subtotal + window.appliedCoupon.discount;
+        const total = Math.max(0, subtotal - window.appliedCoupon.discount);
         document.getElementById('checkoutTotal').textContent = formatCurrency(total);
       } else {
         document.getElementById('discountRow').style.display = 'none';
@@ -3928,14 +3937,12 @@ function applyFilter(products, filter) {
       document.getElementById('paymentMethodName').textContent=method.name;
       document.getElementById('paymentReceiver').textContent=method.account;
       document.getElementById('paymentInstructions').textContent=method.instructions || 'Send payment to the receiving details above, then enter your transaction ID.';
-      const total=window.cart.reduce((sum,item)=>sum+parseFloat(item.price),0)+(window.appliedCoupon?window.appliedCoupon.discount:0);
+      const total=checkoutDue();
       window.storeBdtRate = method.bdtRate || window.storeBdtRate;
       document.getElementById('paymentAmount').textContent = formatCurrency(total);
       document.getElementById('methodPayable').textContent = formatCurrency(total);
       document.getElementById('paymentRateNote').textContent = '$1 = ৳' + window.storeBdtRate.toFixed(2) + ' · Pay ' + (total * method.rate).toFixed(2) + ' ' + method.currency + ' via ' + method.name;
       document.getElementById('paidCurrency').textContent=method.currency;
-      const qr=document.getElementById('paymentMethodQr');qr.hidden=!method.qrUrl;
-      if(method.qrUrl)qr.src=method.qrUrl;else qr.removeAttribute('src');
     }
     async function copyPaymentReceiver() {
       const method=activePaymentMethods[selectedPaymentMethodId];if(!method)return;
@@ -3945,6 +3952,7 @@ function applyFilter(products, filter) {
 
     // Proceed to payment
     async function proceedToPayment() {
+      if(window.appliedCoupon && checkoutDue()===0){await completeCouponPurchase();return;}
       if (window.cart.length === 0) {
         showNotification('Cart is empty', 'error');
         return;
@@ -3957,7 +3965,7 @@ function applyFilter(products, filter) {
       // Calculate total
       const subtotal = window.cart.reduce((sum, item) => sum + parseFloat(item.price), 0);
       const discount = window.appliedCoupon ? window.appliedCoupon.discount : 0;
-      const total = subtotal + discount;
+      const total = Math.max(0, subtotal - discount);
 
       document.getElementById('paymentAmount').textContent = formatCurrency(total);
       watchPaymentMethods();
@@ -3969,6 +3977,26 @@ function applyFilter(products, filter) {
         document.getElementById('paymentModal').classList.add('active');
         document.body.style.overflow = 'hidden';
       }, 300);
+    }
+
+    let completingCoupon=false;
+    async function completeCouponPurchase() {
+      if(completingCoupon || !window.cart.length || !window.appliedCoupon)return;
+      completingCoupon=true;const button=document.getElementById('checkoutProceedBtn');button.disabled=true;
+      try {
+        showLoading('Completing your purchase...');
+        window.checkoutRequestId ||= crypto.randomUUID().replaceAll('-','');
+        await window.Ariyan.api('checkout',{
+          requestId:window.checkoutRequestId,items:window.cart.map(item=>({id:item.id})),
+          couponCode:window.appliedCoupon.code,couponOnly:true
+        });
+        window.checkoutRequestId=null;clearCart();window.appliedCoupon=null;
+        closeModal('checkoutModal');hideLoading();
+        showNotification('Purchase successful! Your download is ready in Purchase History.','success');
+        showPurchaseHistory();
+      } catch(error) {
+        hideLoading();showNotification(error.message,'error');
+      } finally {completingCoupon=false;button.disabled=false;}
     }
 
     // Confirm purchase
@@ -4013,7 +4041,7 @@ function applyFilter(products, filter) {
         // Calculate totals
         const subtotal = window.cart.reduce((sum, item) => sum + parseFloat(item.price), 0);
         const discount = window.appliedCoupon ? window.appliedCoupon.discount : 0;
-        const total = subtotal + discount;
+        const total = Math.max(0, subtotal - discount);
 
         window.checkoutRequestId ||= crypto.randomUUID().replaceAll('-', '');
         await window.Ariyan.api('checkout', {
@@ -4251,7 +4279,7 @@ function applyFilter(products, filter) {
             <div class="order-price">${formatCurrency(order.finalAmount || order.productSnapshot?.discountedPrice || 0, order.bdtRate)}</div>
             ${order.couponUsed ? `<div style="font-size: 12px; color: #00ff88; margin-top: 5px;">
               <i class="fas fa-ticket-alt"></i> Coupon: ${escapeHtml(order.couponUsed)} 
-              (+${formatCurrency(order.discountAmount || 0)})
+              (−${formatCurrency(order.discountAmount || 0)})
             </div>` : ''}
           </div>
         </div>
@@ -7616,7 +7644,6 @@ ADMIN_HTML = r"""<!DOCTYPE html>
         </div>
         <div class="input-group"><label for="pmInstructions">Payment instructions</label><textarea id="pmInstructions" maxlength="2000" placeholder="Send Money / Cash In, account name, or Binance network and memo if needed"></textarea></div>
         <div class="input-group"><label for="pmLogoUrl">Logo image link</label><input id="pmLogoUrl" type="url" placeholder="https://example.com/logo.png"><small class="pm-muted">Or upload a PNG, JPG, WEBP or GIF (up to 500 KB).</small><input id="pmLogoFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif"><div class="pm-logo-preview"><img id="pmLogoPreview" alt="Logo preview" hidden><button class="btn btn-secondary" type="button" onclick="clearPaymentLogo()">Remove logo</button></div></div>
-        <div class="input-group"><label for="pmQrUrl">Payment QR image link (optional)</label><input id="pmQrUrl" type="url" placeholder="https://example.com/payment-qr.png"></div>
         <label class="pm-toggle"><input type="checkbox" id="pmActive"> Enabled — show this method at checkout</label>
         <div class="btn-group"><button class="btn" id="pmSaveBtn" onclick="savePaymentMethod()"><i class="fas fa-save"></i> Save Method</button><button class="btn btn-secondary" onclick="newPaymentMethod('')">Clear Form</button></div>
         <div id="pmMessage" role="status" class="pm-muted"></div>
@@ -7654,10 +7681,6 @@ ADMIN_HTML = r"""<!DOCTYPE html>
           <small id="discountPreviewText" style="display: block; margin-top: 5px; color: #00ff88;"></small>
         </div>
         <div class="input-group">
-          <label><i class="fas fa-qrcode"></i> QR Code Image URL</label>
-          <input type="text" id="productQrImageUrl" placeholder="https://example.com/qr-code.png">
-        </div>
-        <div class="input-group">
           <label for="productZipFile"><i class="fas fa-file-archive"></i> Product ZIP File</label>
           <input type="file" id="productZipFile" accept=".zip,application/zip">
           <input type="hidden" id="productDownloadLink">
@@ -7669,15 +7692,9 @@ ADMIN_HTML = r"""<!DOCTYPE html>
         <!-- Product Screenshots Section -->
         <div class="input-group">
           <label><i class="fas fa-images"></i> Product Screenshots</label>
-          <div class="screenshot-urls-section" id="screenshotUrlsSection">
-            <div id="screenshotUrlsList"></div>
-            <button type="button" class="screenshot-add-btn" id="addScreenshotBtn">
-              <i class="fas fa-plus"></i> Add Screenshot URL
-            </button>
-          </div>
-          <small style="color: #999; font-size: 12px; margin-top: 5px; display: block;">
-            Add multiple screenshot URLs to showcase your product
-          </small>
+          <input type="file" id="productScreenshotFiles" accept="image/jpeg,image/png,image/webp,image/gif" multiple>
+          <small class="pm-muted">Optional. Select multiple pictures at once, or add more later. Up to 10 MB per image; automatically sized. You can save a product without screenshots.</small>
+          <div id="screenshotUrlsList" style="display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;"></div>
         </div>
 
         <button class="btn" id="saveProductBtn"><i class="fas fa-save"></i> Save Product</button>
@@ -8399,7 +8416,7 @@ ADMIN_HTML = r"""<!DOCTYPE html>
     function newPaymentMethod(name) {
       document.getElementById('pmEditId').value='';document.getElementById('pmName').value=name;
       document.getElementById('pmAccount').value='';document.getElementById('pmInstructions').value='';
-      document.getElementById('pmQrUrl').value='';document.getElementById('pmActive').checked=false;
+      document.getElementById('pmActive').checked=false;
       document.getElementById('pmCurrency').value=name==='Binance'?'USD':'BDT';
       updatePaymentRatePreview();
       document.getElementById('pmFormTitle').textContent='Add Payment Method';clearPaymentLogo();paymentFormMessage('');
@@ -8409,7 +8426,7 @@ ADMIN_HTML = r"""<!DOCTYPE html>
       document.getElementById('pmEditId').value=id;document.getElementById('pmName').value=m.name;
       document.getElementById('pmAccount').value=m.account||'';document.getElementById('pmCurrency').value=m.currency==='BDT'?'BDT':'USD';
       updatePaymentRatePreview();document.getElementById('pmInstructions').value=m.instructions||'';
-      document.getElementById('pmQrUrl').value=m.qrUrl||'';document.getElementById('pmActive').checked=!!m.isActive;
+      document.getElementById('pmActive').checked=!!m.isActive;
       paymentLogoValue=m.logo||'';document.getElementById('pmLogoUrl').value=paymentLogoValue.startsWith('data:')?'':paymentLogoValue;
       document.getElementById('pmLogoFile').value='';previewPaymentLogo();paymentFormMessage('');
       document.getElementById('pmFormTitle').textContent='Edit '+m.name;
@@ -8419,7 +8436,7 @@ ADMIN_HTML = r"""<!DOCTYPE html>
       const button=document.getElementById('pmSaveBtn');button.disabled=true;paymentFormMessage('Saving...');
       try {
         const id=document.getElementById('pmEditId').value || crypto.randomUUID().replaceAll('-','');
-        const value={name:document.getElementById('pmName').value.trim(),account:document.getElementById('pmAccount').value.trim(),currency:document.getElementById('pmCurrency').value,rate:Number(document.getElementById('pmRate').value),instructions:document.getElementById('pmInstructions').value.trim(),logo:paymentLogoValue,qrUrl:document.getElementById('pmQrUrl').value.trim(),isActive:document.getElementById('pmActive').checked};
+        const value={name:document.getElementById('pmName').value.trim(),account:document.getElementById('pmAccount').value.trim(),currency:document.getElementById('pmCurrency').value,rate:Number(document.getElementById('pmRate').value),instructions:document.getElementById('pmInstructions').value.trim(),logo:paymentLogoValue,isActive:document.getElementById('pmActive').checked};
         await window.dbSet(window.dbRef(window.db,'paymentMethods/'+id),value);
         document.getElementById('pmEditId').value=id;await loadPaymentMethodsAdmin();paymentFormMessage('Payment method saved.');
       } catch(e) {paymentFormMessage(e.message);} finally {button.disabled=false;}
@@ -8588,44 +8605,39 @@ ADMIN_HTML = r"""<!DOCTYPE html>
 
     document.getElementById('saveContactBtn')?.addEventListener('click', saveContactSettings);
 
-    // Screenshot URLs Management
+    // Optional screenshot uploads; keep completed uploads when retrying a failed save.
+    let pendingScreenshots = [];
+    let productSaving = false;
+    function resetScreenshots() {
+      pendingScreenshots.forEach(item=>URL.revokeObjectURL(item.preview));
+      pendingScreenshots=[];screenshotUrls=[];
+      document.getElementById('productScreenshotFiles').value='';
+    }
     function renderScreenshotUrls() {
-      const list = document.getElementById('screenshotUrlsList');
-      list.innerHTML = '';
-
-      screenshotUrls.forEach((url, index) => {
-        const item = document.createElement('div');
-        item.className = 'screenshot-url-item';
-        item.innerHTML = `
-          <input type="text" class="screenshot-url-input" value="${escapeHtml(url)}" 
-                 placeholder="https://example.com/screenshot${index + 1}.png" 
-                 data-index="${index}">
-          <button type="button" class="screenshot-remove-btn" data-index="${index}">
-            <i class="fas fa-times"></i> Remove
-          </button>
-        `;
-        list.appendChild(item);
-      });
-
-      list.querySelectorAll('.screenshot-url-input').forEach(input => {
-        input.addEventListener('input', function() {
-          const index = parseInt(this.dataset.index);
-          screenshotUrls[index] = this.value.trim();
-        });
-      });
-
-      list.querySelectorAll('.screenshot-remove-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-          const index = parseInt(this.dataset.index);
-          screenshotUrls.splice(index, 1);
+      const list=document.getElementById('screenshotUrlsList');list.innerHTML='';
+      const entries=[...screenshotUrls.map(url=>({url})),...pendingScreenshots.map(item=>({url:item.preview,item}))];
+      entries.forEach((entry,index)=>{
+        const card=document.createElement('div');card.style.width='150px';
+        const img=document.createElement('img');img.src=entry.url;img.alt='Screenshot '+(index+1);
+        img.style.cssText='width:150px;height:120px;object-fit:contain;border-radius:8px;background:#120f22';
+        const button=document.createElement('button');button.type='button';button.className='screenshot-remove-btn';
+        button.textContent='Remove';button.disabled=productSaving;
+        button.addEventListener('click',()=>{
+          if(productSaving)return;
+          if(entry.item){URL.revokeObjectURL(entry.item.preview);pendingScreenshots=pendingScreenshots.filter(item=>item!==entry.item);}
+          else screenshotUrls.splice(index,1);
           renderScreenshotUrls();
         });
+        card.appendChild(img);card.appendChild(button);list.appendChild(card);
       });
     }
-
-    document.getElementById('addScreenshotBtn')?.addEventListener('click', function() {
-      screenshotUrls.push('');
-      renderScreenshotUrls();
+    document.getElementById('productScreenshotFiles').addEventListener('change',event=>{
+      if(productSaving)return;
+      const files=Array.from(event.target.files||[]);
+      if(files.some(file=>!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type)||file.size>10*1024*1024)){
+        showMessage('productSuccess','Each screenshot must be a JPG, PNG, WebP or GIF up to 10 MB.','error');
+      } else files.forEach(file=>pendingScreenshots.push({file,preview:URL.createObjectURL(file)}));
+      event.target.value='';renderScreenshotUrls();
     });
 
     async function loadProducts() {
@@ -8742,7 +8754,7 @@ ADMIN_HTML = r"""<!DOCTYPE html>
       if (!previewText) return;
 
       const realPrice = parseFloat(document.getElementById('productRealPrice').value);
-      const discountPercent = parseFloat(document.getElementById('productDiscountPercent').value);
+      const discountPercent = parseFloat(document.getElementById('productDiscountPercent').value || '0');
 
       if (isNaN(realPrice) || realPrice < 0 || isNaN(discountPercent) || discountPercent < 0 || discountPercent > 100) {
         previewText.textContent = '';
@@ -8791,6 +8803,7 @@ ADMIN_HTML = r"""<!DOCTYPE html>
     });
 
     async function saveProduct() {
+      if(productSaving)return;
       const isEditing = !!document.getElementById('editProductId').value;
       const productId = document.getElementById('editProductId').value || crypto.randomUUID().replaceAll('-', '');
       const imageFile = document.getElementById('productImageFile').files[0];
@@ -8799,8 +8812,7 @@ ADMIN_HTML = r"""<!DOCTYPE html>
       let imageUrl = document.getElementById('productImageUrl').value.trim();
       const description = document.getElementById('productDescription').value.trim();
       const realPrice = parseFloat(document.getElementById('productRealPrice').value);
-      const discountPercent = parseFloat(document.getElementById('productDiscountPercent').value);
-      const qrImageUrl = document.getElementById('productQrImageUrl').value.trim();
+      const discountPercent = parseFloat(document.getElementById('productDiscountPercent').value || '0');
       let downloadLink = document.getElementById('productDownloadLink').value.trim();
 
       if (!title || (!imageUrl && !imageFile) || !description) {
@@ -8810,11 +8822,6 @@ ADMIN_HTML = r"""<!DOCTYPE html>
 
       if (!imageFile && !isValidUrl(imageUrl) && !/^\/media\/[a-f0-9]{32}$/.test(imageUrl)) {
         showMessage('productSuccess', 'Please enter a valid image URL', 'error');
-        return;
-      }
-
-      if (qrImageUrl && !isValidUrl(qrImageUrl)) {
-        showMessage('productSuccess', 'Please enter a valid QR code URL', 'error');
         return;
       }
 
@@ -8835,21 +8842,14 @@ ADMIN_HTML = r"""<!DOCTYPE html>
 
       const discountedPrice = realPrice - (realPrice * discountPercent / 100);
 
-      // Validate screenshot URLs
-      const validScreenshots = screenshotUrls.filter(url => {
-        const trimmed = url.trim();
-        return trimmed && isValidUrl(trimmed);
-      });
-
       const productData = {
         title: title,
         imageUrl: imageUrl,
         description: description,
         realPrice: realPrice,
         discountedPrice: discountedPrice,
-        qrImageUrl: qrImageUrl,
         downloadLink: downloadLink,
-        screenshots: validScreenshots,
+        screenshots: screenshotUrls.slice(),
         updatedAt: new Date().toISOString()
       };
 
@@ -8859,6 +8859,9 @@ ADMIN_HTML = r"""<!DOCTYPE html>
 
       const btn = document.getElementById('saveProductBtn');
       btn.disabled = true;
+      productSaving=true;
+      const productControls=Array.from(document.querySelectorAll('#productsTab .card:first-child input, #productsTab .card:first-child textarea, #clearProductBtn'));
+      productControls.forEach(control=>control.disabled=true);renderScreenshotUrls();
       btn.innerHTML = '<span class="loading-spinner"></span>Saving...';
 
       try {
@@ -8876,6 +8879,13 @@ ADMIN_HTML = r"""<!DOCTYPE html>
           document.getElementById('productZipFile').value='';
           document.getElementById('productZipInfo').textContent=uploaded.filename+' · uploaded';
         }
+        while(pendingScreenshots.length) {
+          const item=pendingScreenshots[0];
+          const uploaded=await productUpload('image',item.file);
+          screenshotUrls.push(uploaded.url);pendingScreenshots.shift();URL.revokeObjectURL(item.preview);
+          renderScreenshotUrls();
+        }
+        productData.screenshots=screenshotUrls.slice();
         if(productAssetState.archiveId) downloadLink='/download/'+productId;
         Object.assign(productData,{imageUrl,downloadLink,...productAssetState});
         document.getElementById('productUploadStatus').textContent='Saving product...';
@@ -8887,7 +8897,7 @@ ADMIN_HTML = r"""<!DOCTYPE html>
           showMessage('productSuccess', '✅ Product added successfully!', 'success');
         }
         
-        clearProductForm();
+        clearProductForm(true);
         loadProducts();
         window.showNotification('✅ Product saved successfully!');
       } catch (error) {
@@ -8898,12 +8908,14 @@ ADMIN_HTML = r"""<!DOCTYPE html>
         btn.innerHTML = '<i class="fas fa-save"></i> Save Product';
         document.getElementById('productImageFile').disabled=false;
         document.getElementById('productZipFile').disabled=false;
+        productSaving=false;productControls.forEach(control=>control.disabled=false);renderScreenshotUrls();
       }
     }
 
     document.getElementById('saveProductBtn')?.addEventListener('click', saveProduct);
 
     async function editProduct(id) {
+  if(productSaving)return;
   try {
     window.showLoadingOverlay('Loading product...');
     const snapshot = await window.dbGet(window.dbRef(window.db, `products/${id}`));
@@ -8944,10 +8956,10 @@ ADMIN_HTML = r"""<!DOCTYPE html>
         ? Math.round(((product.realPrice - product.discountedPrice) / product.realPrice) * 10000) / 100
         : 0;
       document.getElementById('productDiscountPercent').value = backCalculatedPercent;
-      document.getElementById('productQrImageUrl').value = product.qrImageUrl || '';
       document.getElementById('productDownloadLink').value = product.downloadLink || '';
       
-      screenshotUrls = product.screenshots || [];
+      resetScreenshots();
+      screenshotUrls = Array.isArray(product.screenshots) ? product.screenshots.slice() : [];
       renderScreenshotUrls();
       updateDiscountPreview();
       
@@ -8982,7 +8994,9 @@ ADMIN_HTML = r"""<!DOCTYPE html>
       }
     }
 
-    function clearProductForm() {
+    function clearProductForm(afterSave = false) {
+      if(productSaving && afterSave !== true)return;
+      resetScreenshots();
       resetProductAssetInputs();
       document.getElementById('editProductId').value = '';
       document.getElementById('productTitle').value = '';
@@ -8990,7 +9004,6 @@ ADMIN_HTML = r"""<!DOCTYPE html>
       document.getElementById('productDescription').value = '';
       document.getElementById('productRealPrice').value = '';
       document.getElementById('productDiscountPercent').value = '';
-      document.getElementById('productQrImageUrl').value = '';
       document.getElementById('productDownloadLink').value = '';
       screenshotUrls = [];
       renderScreenshotUrls();
@@ -9172,7 +9185,7 @@ ADMIN_HTML = r"""<!DOCTYPE html>
           ${order.paymentMethod ? `<div><span class="order-field">Payment Method:</span> <span class="order-value">${escapeHtml(order.paymentMethod.name)}</span></div><div><span class="order-field">Paid:</span> <span class="order-value">${escapeHtml(String(order.amountPaid))} ${escapeHtml(order.paymentMethod.currency)}</span></div><div><span class="order-field">Receiving Account:</span> <span class="order-value">${escapeHtml(order.paymentMethod.account)}</span></div><div><span class="order-field">Expected Payment:</span> <span class="order-value">${escapeHtml(String(order.paymentMethod.expectedAmount))} ${escapeHtml(order.paymentMethod.currency)}</span></div>` : ''}
           <div><span class="order-field">Transaction ID:</span> <span class="order-value">${escapeHtml(order.userInput?.utrId || 'N/A')}</span></div>
           <div><span class="order-field">Price:</span> <span class="order-value" style="color: #00ff88;">${formatCurrency(order.finalAmount || order.productSnapshot?.discountedPrice || 0, order.bdtRate)}</span></div>
-          ${order.couponUsed ? `<div><span class="order-field">Coupon:</span> <span class="order-value" style="color: #ffa500;">${escapeHtml(order.couponUsed)} (+${formatCurrency(order.discountAmount || 0)})</span></div>` : ''}
+          ${order.couponUsed ? `<div><span class="order-field">Coupon:</span> <span class="order-value" style="color: #ffa500;">${escapeHtml(order.couponUsed)} (−${formatCurrency(order.discountAmount || 0)})</span></div>` : ''}
         </div>
         <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(0, 255, 255, 0.2);">
           <label style="color: #00ffff; font-size: 14px; margin-bottom: 8px; display: block;"><i class="fas fa-info-circle"></i> Order Status:</label>
@@ -11024,7 +11037,7 @@ def validate_payment_method(value):
     method={'name':text_field('name',60,True),'account':text_field('account',250),
             'instructions':text_field('instructions',2000),'currency':value.get('currency','USDT'),
             'rate':exchange_rate() if value.get('currency')=='BDT' else 1, 'logo':payment_image(value.get('logo','')),
-            'qrUrl':payment_image(value.get('qrUrl',''),False),'isActive':value.get('isActive',False),'updatedAt':stamp()}
+            'qrUrl':'','isActive':value.get('isActive',False),'updatedAt':stamp()}
     if method['currency']=='USDT': method['currency']='USD'
     if method['currency'] not in ('BDT','USD'): raise APIError('Choose BDT or dollars (USD).')
     if type(method['isActive']) is not bool: raise APIError('Enabled must be on or off.')
@@ -11078,11 +11091,8 @@ def checkout():
     checkout_id=user['uid']+'_'+reqid
     db=database();plan=db.checkouts.find_one({'_id':checkout_id})
     if not plan:
-        method_id=data.get('paymentMethodId')
-        method=checkout_payment_method(method_id)
-        items=data.get('items');utr=data.get('utrId');paid=number(data.get('amountPaid'))
-        if not isinstance(items,list) or not 1<=len(items)<=100 or paid<=0: raise APIError('Invalid cart or payment amount.')
-        if not isinstance(utr,str) or not re.fullmatch(r'[A-Za-z0-9_-]{4,128}',utr): raise APIError('Transaction ID must have 4 to 128 letters, numbers, hyphens or underscores.')
+        items=data.get('items')
+        if not isinstance(items,list) or not 1<=len(items)<=100: raise APIError('Invalid cart.')
         products=[]
         for item in items:
             pid=item.get('id') if isinstance(item,dict) else None
@@ -11104,25 +11114,51 @@ def checkout():
                 adjustment=subtotal*adjustment/100
                 maximum=number(c.get('maxDiscount',0))
                 if maximum: adjustment=min(adjustment,maximum)
+        adjustment=min(subtotal,adjustment)
+        total=round(max(0,subtotal-adjustment),2)
+        coupon_complete=bool(coupon) and total==0
+        if data.get('couponOnly') and not coupon_complete:
+            raise APIError('This coupon does not cover the full order price. Apply a sufficient coupon or proceed to payment.',409)
+        if coupon_complete:
+            method_id='coupon';paid=0;utr='Coupon redemption'
+            method={'name':'Coupon','account':'','currency':'USD','rate':1}
+        else:
+            method_id=data.get('paymentMethodId');method=checkout_payment_method(method_id)
+            paid=number(data.get('amountPaid'));utr=data.get('utrId')
+            if paid<=0: raise APIError('Invalid payment amount.')
+            if not isinstance(utr,str) or not re.fullmatch(r'[A-Za-z0-9_-]{4,128}',utr): raise APIError('Transaction ID must have 4 to 128 letters, numbers, hyphens or underscores.')
         order_bdt_rate=exchange_rate()
         if method['currency']=='BDT': method['rate']=order_bdt_rate
-        method_snapshot={'id':method_id,'name':method['name'],'account':method['account'],'currency':method['currency'],'rate':method['rate'],'expectedAmount':round((subtotal+adjustment)*method['rate'],2)}
+        method_snapshot={'id':method_id,'name':method['name'],'account':method['account'],'currency':method['currency'],'rate':method['rate'],'expectedAmount':round(total*method['rate'],2)}
         orders={}
         for i,(pid,product,price) in enumerate(products):
             oid=user['uid']+'_'+reqid+'_'+str(i)
-            orders[oid]={'productId':pid,'bdtRate':order_bdt_rate,'bdtTotal':round((subtotal+adjustment)*order_bdt_rate,2),'paymentMethod':method_snapshot,'amountPaid':paid,'productSnapshot':{'title':product.get('title',''),'imageUrl':product.get('imageUrl',''),'discountedPrice':price},'userInput':{'utrId':utr,'name':user.get('displayName') or 'N/A','email':user['email'],'phone':'N/A'},'userId':user['uid'],'userEmail':user['email'],'couponUsed':code,'discountAmount':round(adjustment,2),'finalAmount':round(subtotal+adjustment,2),'status':'pending','createdAt':stamp()}
-        # Keep the supplied shop's additive coupon calculation; amounts are computed on the server.
-        plan={'_id':checkout_id,'orders':orders,'couponId':coupon['_id'] if coupon else None,'couponLimit':int(coupon['value'].get('usageLimit',0) or 0) if coupon else 0,'createdAt':stamp()}
+            orders[oid]={'productId':pid,'bdtRate':order_bdt_rate,'bdtTotal':round(total*order_bdt_rate,2),'paymentMethod':method_snapshot,'amountPaid':paid,'productSnapshot':{'title':product.get('title',''),'imageUrl':product.get('imageUrl',''),'discountedPrice':price},'userInput':{'utrId':utr,'name':user.get('displayName') or 'N/A','email':user['email'],'phone':'N/A'},'userId':user['uid'],'userEmail':user['email'],'couponUsed':code,'discountAmount':round(adjustment,2),'finalAmount':total,'status':'confirmed' if coupon_complete else 'pending','createdAt':stamp()}
+        # Server-calculated discounts; fully covered coupon orders unlock downloads.
+        plan={'_id':checkout_id,'orders':orders,'couponComplete':coupon_complete,'couponTerms':{k:coupon['value'].get(k) for k in ('discountValue','discountType','maxDiscount','minAmount','expiryDate')} if coupon else None,'couponId':coupon['_id'] if coupon else None,'couponLimit':int(coupon['value'].get('usageLimit',0) or 0) if coupon else 0,'createdAt':stamp()}
         try: db.checkouts.insert_one(plan)
         except DuplicateKeyError: plan=db.checkouts.find_one({'_id':checkout_id})
     if plan.get('completed'): return jsonify(ok=True,orderIds=list(plan['orders']))
     saved_method=next(iter(plan['orders'].values())).get('paymentMethod')
     if not saved_method: raise APIError('Please select a payment method and submit a new checkout.',409,'payment/required')
-    current_method=checkout_payment_method(saved_method['id'])
-    if any(current_method[k]!=saved_method[k] for k in ('account','currency','rate')):
-        raise APIError('Payment details changed. Contact support if you already paid.',409,'payment/unavailable')
+    if not plan.get('couponComplete'):
+        current_method=checkout_payment_method(saved_method['id'])
+        if any(current_method[k]!=saved_method[k] for k in ('account','currency','rate')):
+            raise APIError('Payment details changed. Contact support if you already paid.',409,'payment/unavailable')
     if plan.get('couponId'):
-        condition={'_id':plan['couponId'],'redeemed':{'$ne':checkout_id}}
+        current_coupon=db.coupons.find_one({'_id':plan['couponId']})
+        already_redeemed=current_coupon and checkout_id in current_coupon.get('redeemed',[])
+        if not already_redeemed:
+            c=current_coupon['value'] if current_coupon else {}
+            if not c.get('isActive') or (c.get('expiryDate') and datetime.fromisoformat(c['expiryDate'].replace('Z','+00:00')).replace(tzinfo=timezone.utc)<=now()):
+                raise APIError('Coupon is inactive, expired or removed.',409)
+            # A changed coupon requires a new checkout, never stale free entitlement.
+            if plan.get('couponTerms') and any(c.get(k)!=v for k,v in plan['couponTerms'].items()):
+                raise APIError('Coupon changed. Apply it again in a new checkout.',409)
+            plan['couponLimit']=int(c.get('usageLimit',0) or 0)
+        condition={'_id':plan['couponId'],'redeemed':{'$ne':checkout_id},'value.isActive':True}
+        for key,value in (plan.get('couponTerms') or {}).items():
+            condition['value.'+key]=value
         if plan['couponLimit']>0:
             condition['$or']=[{'value.usedCount':{'$lt':plan['couponLimit']}},{'value.usedCount':{'$exists':False}}]
         reserved=db.coupons.update_one(condition,{'$inc':{'value.usedCount':1},'$addToSet':{'redeemed':checkout_id}})
