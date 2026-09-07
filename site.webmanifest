@@ -1,0 +1,16 @@
+{
+  "name": "SOHAG BD SHOP — Premium Digital Services",
+  "short_name": "Sohag BD Shop",
+  "description": "Premium VPN, OTT, proxies, bots, tools, licenses and AI subscriptions with auto-delivery.",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#0f111a",
+  "theme_color": "#0f111a",
+  "lang": "en",
+  "icons": [
+    { "src": "favicon-16x16.png?v=2", "sizes": "16x16", "type": "image/png" },
+    { "src": "favicon-32x32.png?v=2", "sizes": "32x32", "type": "image/png" },
+    { "src": "favicon-96x96.png?v=2", "sizes": "96x96", "type": "image/png" },
+    { "src": "apple-touch-icon.png?v=2", "sizes": "180x180", "type": "image/png" }
+  ]
+}

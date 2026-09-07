@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>SOHAG BD SHOP | Login</title>
     <!-- Favicon / App icons -->
-    <link rel="icon" href="/favicon.ico?v=2" sizes="any">
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=2">
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=2">
-    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png?v=2">
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=2">
-    <link rel="manifest" href="/site.webmanifest?v=2">
+    <link rel="icon" href="favicon.ico?v=2" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=2">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png?v=2">
+    <link rel="icon" type="image/png" sizes="96x96" href="favicon-96x96.png?v=2">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=2">
+    <link rel="manifest" href="site.webmanifest?v=2">
     <meta name="theme-color" content="#0f111a">
     <meta name="theme-color" content="#06070d">
     <!-- ⚡ Font Awesome non-blocking AND high priority.
@@ -998,6 +998,11 @@
         challenge  = r.challenge;
         CFG.length = r.length || CFG.length;
 
+        // 🔓 Demo builds show the one-time code right on the screen, because there is
+        //    no Telegram bot to deliver it. Real backends never send `demo_code`, so
+        //    this line is a no-op there.
+        window.__demoCode = r.demo_code ? String(r.demo_code) : null;
+
         // r.reused = the server did not send a new code; the one sent moments ago is still
         // valid (for example the user already fetched a code with /login in the bot). Previously in this case
         // a "please wait 60 seconds" message appeared and the user got stuck.
@@ -1022,6 +1027,16 @@
             : ('📨 A <b>' + CFG.length + '-digit code</b> was just sent to ' + who +
                ' <span class="tg-chip">' + escHtml(info.tg_masked || tgIdUsed) + '</span><br>' +
                'Open Telegram and type it below. <b>Never share this code with anyone.</b>');
+
+        // 🔓 Demo-mode helper: no bot exists in a static preview, so the code is shown here.
+        if (window.__demoCode) {
+            $('sentNote').innerHTML +=
+                '<div style="margin-top:12px;padding:9px 12px;border:1px dashed rgba(0,242,254,.55);border-radius:11px;' +
+                'background:rgba(0,242,254,.08);font-size:13px;line-height:1.5">' +
+                '🔓 <b>Demo mode</b> — your one-time code is <b style="letter-spacing:3px;color:#7ef9d0">' +
+                escHtml(window.__demoCode) + '</b><br>' +
+                '<span style="opacity:.7;font-size:11.5px">On the live site this code is sent to your Telegram instead.</span></div>';
+        }
 
         buildCells(CFG.length);
         startTtlTimer(info.expires_in || CFG.ttl);

@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Shop — SOHAG BD SHOP</title>
+    <link rel="icon" href="favicon.ico?v=2" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=2">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png?v=2">
+    <link rel="icon" type="image/png" sizes="96x96" href="favicon-96x96.png?v=2">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=2">
+    <link rel="manifest" href="site.webmanifest?v=2">
+    <meta name="theme-color" content="#0f111a">
+    <link rel="preload" as="style" href="fa-subset.css?v=3"
+          onload="this.rel='stylesheet'; this.onload=null;">
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="fa-solid-900.woff2">
+    <noscript><link rel="stylesheet" href="fa-subset.css?v=3"></noscript>
+    <link rel="preload" as="style" href="user-theme.css?v=6">
+    <script src="app-boot.js?v=4"></script>
+    <link rel="stylesheet" href="user-theme.css?v=6">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f111a; color: #fff; min-height: 100vh; padding-bottom: 100px; }
+        .header { background: rgba(23, 17, 36, 0.85); backdrop-filter: blur(12px); padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid rgba(0, 242, 254, 0.3); position: sticky; top: 0; z-index: 1000; }
+        .header-left { display: flex; align-items: center; gap: 15px; }
+        .header h1 { font-size: 22px; font-weight: 900; background: linear-gradient(90deg, #00f2fe, #4facfe); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 0; }
+        .header-actions { display: flex; align-items: center; gap: 12px; }
+        .header-balance { display: inline-flex; align-items: center; gap: 9px; padding: 6px 13px 6px 11px; border-radius: 14px; border: 1px solid rgba(0,242,254,0.32); background: rgba(6,8,16,0.55); white-space: nowrap; }
+        .hb-icon { font-size: 14px; color: #00f2fe; }
+        .hb-text { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+        .hb-label { font-size: 8.5px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: #8ea1bb; }
+        .header-wallet { font-family: Consolas, 'SF Mono', monospace; font-size: 14.5px; font-weight: 800; color: #7ef9d0; }
+        .header-icon { cursor: pointer; font-size: 20px; color: #00f2fe; padding: 5px; }
+        .header-icon:hover { color: #ff0844; }
+        .cat-hero { max-width: 900px; margin: 0 auto; padding: 18px 16px 2px; display: flex; align-items: center; gap: 14px; }
+        .cat-hero img { width: 74px; height: 74px; border-radius: 18px; object-fit: cover; border: 1px solid rgba(0,242,254,.35); box-shadow: 0 6px 22px rgba(0,220,255,.18); }
+        .cat-hero h2 { font-size: 22px; font-weight: 900; letter-spacing: .3px; }
+        .cat-hero .tag { color: #00f2fe; font-size: 12px; font-weight: 700; }
+        .cat-hero .back { color: #93a4bd; font-size: 13px; cursor: pointer; margin-top: 4px; display: inline-flex; gap: 6px; align-items: center; }
+        .cat-hero .back:hover { color: #00f2fe; }
+        .demo-note { max-width: 900px; margin: 12px auto 0; padding: 10px 14px; border: 1px dashed rgba(247,183,51,.55); border-radius: 12px; background: rgba(247,183,51,.07); color: #ffd58a; font-size: 12.5px; line-height: 1.55; display: flex; gap: 10px; align-items: flex-start; }
+        .demo-note i { color: #f7b733; margin-top: 2px; }
+        .plans { max-width: 900px; margin: 0 auto; padding: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 14px; }
+        .plan { background: linear-gradient(160deg, #171c28, #131722); border: 1px solid #232c3d; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 10px; transition: .25s; position: relative; overflow: hidden; }
+        .plan:hover { transform: translateY(-3px); border-color: rgba(0,242,254,.55); box-shadow: 0 12px 30px rgba(0,200,240,.12); }
+        .plan .feat { position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #00f2fe, #4facfe); }
+        .plan h3 { font-size: 16px; font-weight: 800; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+        .plan .price { color: #7ef9d0; font-family: Consolas, monospace; font-size: 18px; white-space: nowrap; }
+        .plan .meta { color: #93a4bd; font-size: 12px; display: flex; gap: 14px; flex-wrap: wrap; }
+        .plan ul { list-style: none; margin-top: 2px; flex: 1; }
+        .plan li { font-size: 12.5px; color: #c6d2e4; padding: 3px 0 3px 20px; position: relative; }
+        .plan li:before { content: '\f058'; font-family: 'Font Awesome 6 Free'; font-weight: 900; position: absolute; left: 0; color: #00f2fe; font-size: 11px; }
+        .buy-row { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+        .qty { display: inline-flex; align-items: center; border: 1px solid #2b3850; border-radius: 10px; overflow: hidden; }
+        .qty button { background: #1b2333; color: #00f2fe; border: 0; width: 30px; height: 34px; font-size: 15px; cursor: pointer; }
+        .qty span { min-width: 34px; text-align: center; font-weight: 800; font-size: 14px; }
+        .buy { flex: 1; background: linear-gradient(90deg, #00f2fe, #4facfe); color: #04121f; border: 0; padding: 10px 12px; border-radius: 10px; font-weight: 900; font-size: 14px; cursor: pointer; letter-spacing: .3px; transition: .2s; }
+        .buy:hover { filter: brightness(1.12); }
+        .buy:disabled { opacity: .55; cursor: not-allowed; }
+        .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(12, 14, 22, 0.95); backdrop-filter: blur(14px); border-top: 1px solid rgba(0, 242, 254, 0.25); display: flex; justify-content: space-around; padding: 10px 6px calc(10px + env(safe-area-inset-bottom)); z-index: 900; max-width: 520px; margin: 0 auto; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; color: #93a4bd; text-decoration: none; font-size: 9.5px; font-weight: 800; min-width: 52px; }
+        .nav-item i { font-size: 18px; }
+        .nav-item.active { color: #00f2fe; }
+        /* bottom sheet */
+        .overlay { display: none; position: fixed; inset: 0; background: rgba(5, 7, 12, 0.75); z-index: 1200; align-items: flex-end; justify-content: center; }
+        .sheet { width: 100%; max-width: 480px; background: #151a26; border: 1px solid #273144; border-radius: 22px 22px 0 0; padding: 20px; animation: pxFadeUp .25s ease; text-align: center; }
+        .sheet h3 { margin-bottom: 6px; }
+        .sheet .row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; border-bottom: 1px dashed rgba(255,255,255,.08); }
+        .sheet .row b { color: #00f2fe; }
+        .sheet .btn2 { display: block; margin-top: 14px; background: linear-gradient(90deg, #00f2fe, #4facfe); color: #04121f; border: 0; padding: 12px; border-radius: 12px; font-weight: 900; font-size: 15px; cursor: pointer; text-decoration: none; text-align: center; }
+        .sheet .btn2.ghost { background: transparent; color: #93a4bd; border: 1px solid #2b3850; margin-top: 8px; }
+        .toast-holder { position: fixed; left: 0; right: 0; bottom: 90px; display: flex; justify-content: center; z-index: 2000; pointer-events: none; }
+        .mini-toast { background: rgba(6,10,20,.95); border: 1px solid rgba(0,242,254,.4); color: #dffaff; padding: 11px 18px; border-radius: 12px; font-size: 13.5px; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+        .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.35); border-top-color: #00f2fe; border-radius: 50%; animation: rot .8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+        @keyframes rot { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="header-left">
+            <h1>𝗦𝗢𝗛𝗔𝗚 𝗕𝗗 𝗦𝗛𝗢𝗣</h1>
+        </div>
+        <div class="header-actions">
+            <div class="header-balance" title="Wallet balance">
+                <i class="fa-solid fa-wallet hb-icon"></i>
+                <span class="hb-text">
+                    <span class="hb-label">Balance</span>
+                    <span class="header-wallet" id="walletDisplay">$0.00</span>
+                </span>
+            </div>
+            <div class="header-icon" onclick="window.location.href='account.html'">
+                <i class="fa-solid fa-user-astronaut"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="cat-hero" id="catHero"></div>
+
+    <div class="demo-note">
+        <i class="fa-solid fa-circle-info"></i>
+        <span id="demoNote">This demo shop works without a server — buying adds a sample order that is
+        auto-delivered with test keys within a few seconds. Balance comes from your wallet
+        (add funds on the <b>Deposit</b> tab).</span>
+    </div>
+
+    <div class="plans" id="plans"></div>
+
+    <div class="bottom-nav">
+        <a href="index.html" class="nav-item"><i class="fa-solid fa-store"></i><span>Shop</span></a>
+        <a href="deposit.html" class="nav-item"><i class="fa-solid fa-wallet"></i><span>Deposit</span></a>
+        <a href="pending.html" class="nav-item"><i class="fa-solid fa-clock-rotate-left"></i><span>Pending</span></a>
+        <a href="orders.html" class="nav-item"><i class="fa-solid fa-box-open"></i><span>Orders</span></a>
+        <a href="#" class="nav-item" onclick="openSupport(event)"><i class="fa-solid fa-headset"></i><span>Support</span></a>
+    </div>
+
+    <!-- Buy confirm sheet -->
+    <div class="overlay" id="buySheet">
+        <div class="sheet">
+            <h3><i class="fa-solid fa-cart-shopping" style="color:#00f2fe"></i> Confirm order</h3>
+            <p style="color:#93a4bd; font-size:12.5px; margin-bottom:8px;">The amount is deducted from your wallet and delivery happens automatically.</p>
+            <div id="buyDetail"></div>
+            <button class="btn2" id="buyBtn">Place Order</button>
+            <button class="btn2 ghost" onclick="closeSheet('buySheet')">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Insufficient balance sheet -->
+    <div class="overlay" id="fundSheet">
+        <div class="sheet">
+            <h3 style="color:#ffb199"><i class="fa-solid fa-circle-exclamation"></i> Low balance</h3>
+            <p style="color:#93a4bd; font-size:13px; padding:10px 0;">Your wallet does not have enough balance for this order.</p>
+            <div class="row"><span>Wallet balance</span><b id="fundBal">$0.00</b></div>
+            <div class="row"><span>Order total</span><b style="color:#ffb199" id="fundNeed">$0.00</b></div>
+            <a href="deposit.html" class="btn2"><i class="fa-solid fa-wallet"></i> Deposit now</a>
+            <button class="btn2 ghost" onclick="closeSheet('fundSheet')">Not now</button>
+        </div>
+    </div>
+
+    <div class="toast-holder" id="toastBox" style="display:none"><div class="mini-toast" id="toastText"></div></div>
+
+    <script>
+        // ---------------- catalog ----------------
+        var CATALOG = {
+            vpn: { name: 'VPN Services', tag: 'Secure tunnels for complete privacy.',
+                   img: 'vpn.jpg', badge: 'Popular',
+                   plans: [
+                       { title: 'Premium VPN — 1 Month', price: 2.50, meta: '1 device · 10+ locations', feats: ['Full speed, no bandwidth limit', 'Works on PC, Android & iOS', 'Instant auto-delivery'] },
+                       { title: 'Premium VPN — 3 Months', price: 6.00, meta: '1 device · 10+ locations', feats: ['Everything in 1-month plan', 'Save vs monthly billing', 'Priority support'] },
+                       { title: 'Premium VPN — 6 Months', price: 10.00, meta: '2 devices · all locations', feats: ['Two simultaneous devices', 'Best value deal', 'Instant auto-delivery'] }
+                   ] },
+            ott: { name: 'OTT Platforms', tag: 'Premium Netflix & YouTube accounts.',
+                   img: 'ott.jpg', badge: 'Top Rated',
+                   plans: [
+                       { title: 'Netflix Shared — 1 Month', price: 3.00, meta: '1 screen', feats: ['Full HD streaming', 'Private profile slot', 'Auto-delivered on completion'] },
+                       { title: 'Netflix Premium — 1 Month', price: 6.00, meta: '4K · private', feats: ['Ultra HD + private profile', 'Works on all devices', 'Instant delivery'] },
+                       { title: 'YouTube Premium — 1 Month', price: 2.00, meta: 'personal', feats: ['No ads on YouTube', 'Background play', 'Google login included'] }
+                   ] },
+            proxy: { name: 'Proxy Servers', tag: 'High-speed residential proxies.',
+                     img: 'proxy.jpg', badge: 'Fast',
+                     plans: [
+                       { title: 'Residential Proxy — 1 GB', price: 2.50, meta: 'HTTP/SOCKS5', feats: ['Fresh residential IPs', 'No speed throttling', 'Credits delivered by bot'] },
+                       { title: 'Residential Proxy — 5 GB', price: 9.00, meta: 'HTTP/SOCKS5', feats: ['Best for bulk tasks', 'Multiple regions', 'Instant top-up'] }
+                   ] },
+            bot: { name: 'Telegram Bots', tag: 'Premium automation scripts.',
+                   img: 'bot.jpg', badge: 'Auto',
+                   plans: [
+                       { title: 'Auto-Forward Bot', price: 8.00, meta: 'lifetime script', feats: ['Forward posts between channels', 'Keyword filters', 'Setup help included'] },
+                       { title: 'Referral Bot Setup', price: 12.00, meta: 'lifetime script', feats: ['Join-to-earn system', 'Balance & withdraw flow', 'Complete source code'] }
+                   ] },
+            tool: { name: 'Tool Service', tag: 'Exclusive SEO tools & utilities.',
+                    img: 'tools.jpg', badge: 'Pro',
+                    plans: [
+                       { title: 'SEO Audit Tool — Monthly', price: 5.00, meta: '100 checks/mo', feats: ['On-page + backlink audit', 'PDF reports', 'Multi-site support'] },
+                       { title: 'Bulk Scraper Pack', price: 7.00, meta: 'lifetime', feats: ['Profile & group scraper', 'Export to CSV', 'Windows tool'] }
+                   ] },
+            license: { name: 'License Keys', tag: 'Original software & Windows keys.',
+                       img: 'license.jpg', badge: 'Genuine',
+                       plans: [
+                           { title: 'Windows 10/11 Pro Key', price: 4.00, meta: '1 PC · genuine', feats: ['Original retail key', 'Lifetime activation', 'Email delivery'] },
+                           { title: 'Office 2021 Pro Key', price: 6.00, meta: '1 PC · genuine', feats: ['Full office suite', 'Works worldwide', 'Email delivery'] }
+                       ] },
+            ai: { name: 'AI Subscription', tag: 'ChatGPT, Gemini & premium AI tools.',
+                  img: 'ai.jpg', badge: 'New',
+                  plans: [
+                      { title: 'ChatGPT Plus — 1 Month', price: 8.00, meta: 'full account', feats: ['GPT-4o access', 'Private account', 'Instant activation'] },
+                      { title: 'Gemini Advanced — 1 Month', price: 7.00, meta: 'full account', feats: ['Google AI Ultra', 'Works with Google apps', 'Instant activation'] }
+                  ] },
+            other: { name: 'Other Services', tag: 'Miscellaneous digital goods.',
+                     img: 'other.jpg', badge: 'More',
+                     plans: [
+                         { title: 'Custom Digital Request', price: 5.00, meta: 'starting at', feats: ['Tell us what you need', 'Usually delivered same day', 'Support chat included'] },
+                         { title: 'Starter Digital Bundle', price: 3.00, meta: 'mixed goods', feats: ['Surprise sample pack', 'Great for testing us', 'Auto-delivered'] }
+                     ] }
+        };
+
+        var ICONS = { vpn: 'fa-shield-halved', ott: 'fa-star', proxy: 'fa-gauge-high', bot: 'fa-robot',
+                      tool: 'fa-screwdriver-wrench', license: 'fa-key', ai: 'fa-wand-magic-sparkles', other: 'fa-cubes' };
+
+        var currentCategory = localStorage.getItem('selectedCategory') || 'other';
+        if (!CATALOG[currentCategory]) currentCategory = 'other';
+
+        // ---------------- page building ----------------
+        function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (m) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]; }); }
+
+        function paintCategory() {
+            var cat = CATALOG[currentCategory];
+            document.getElementById('catHero').innerHTML =
+                '<img src="' + cat.img + '" alt="">' +
+                '<div><div class="tag"><i class="fa-solid ' + (ICONS[currentCategory] || 'fa-store') + '"></i> ' + esc(cat.badge) + '</div>' +
+                '<h2>' + esc(cat.name) + '</h2>' +
+                '<div class="back" onclick="window.location.href=\'index.html\'"><i class="fa-solid fa-arrow-left"></i> Back to all categories</div></div>';
+            document.title = cat.name + ' — SOHAG BD SHOP';
+        }
+
+        function qtyOf(id) { return parseInt(document.getElementById('q_' + id).textContent, 10) || 1; }
+        function inc(id) {
+            var el = document.getElementById('q_' + id);
+            var v = (parseInt(el.textContent, 10) || 1) + 1;
+            if (v > 50) return;
+            el.textContent = v;
+        }
+        function dec(id) {
+            var el = document.getElementById('q_' + id);
+            var v = (parseInt(el.textContent, 10) || 1) - 1;
+            if (v < 1) return;
+            el.textContent = v;
+        }
+
+        function paintPlans() {
+            var cat = CATALOG[currentCategory];
+            var html = '';
+            cat.plans.forEach(function (p, i) {
+                var id = currentCategory + '_' + i;
+                html += '<div class="plan"><div class="feat"></div><h3>' + esc(p.title) +
+                        '<span class="price">$' + p.price.toFixed(2) + '</span></h3>' +
+                        '<div class="meta"><span><i class="fa-solid fa-tag" style="color:#00f2fe"></i> ' + esc(p.meta) + '</span></div>' +
+                        '<ul>' + p.feats.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>' +
+                        '<div class="buy-row"><div class="qty"><button onclick="dec(\'' + id + '\')">−</button>' +
+                        '<span id="q_' + id + '">1</span><button onclick="inc(\'' + id + '\')">+</button></div>' +
+                        '<button class="buy" onclick="buy(\'' + id + '\',' + p.price + ',\'' + esc(p.title).replace(/'/g, "\\'") + '\')">Buy Now</button></div></div>';
+            });
+            document.getElementById('plans').innerHTML = html;
+        }
+
+        // ---------------- buying ----------------
+        var pendingBuy = null;
+
+        function buy(id, price, title) {
+            if (localStorage.getItem('isLoggedIn') !== 'true') {
+                toast('Please login to place an order');
+                setTimeout(function () { window.location.href = 'login.html'; }, 900);
+                return;
+            }
+            pendingBuy = { id: id, title: title, price: price, qty: qtyOf(id) };
+            document.getElementById('buyDetail').innerHTML =
+                '<div class="row"><span>' + esc(title) + ' × ' + pendingBuy.qty + '</span><b>$' + (price * pendingBuy.qty).toFixed(2) + '</b></div>';
+            openSheet('buySheet');
+        }
+
+        async function placeOrder() {
+            if (!pendingBuy) return;
+            var btn = document.getElementById('buyBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spin"></span>Placing order…';
+            try {
+                var res = await fetch('api_place_order.php', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        telegram_id: localStorage.getItem('userTelegramId') || '',
+                        title: pendingBuy.title,
+                        details: CATALOG[currentCategory].name,
+                        price: pendingBuy.price,
+                        quantity: pendingBuy.qty
+                    })
+                });
+                var data = await res.json();
+                if (!data.success) {
+                    btn.disabled = false; btn.innerHTML = 'Place Order';
+                    closeSheet('buySheet');
+                    if (data.reason === 'insufficient') { showFundSheet(); }
+                    else toast('⚠️ ' + (data.message || 'Could not place the order.'));
+                    return;
+                }
+                paintBalanceValue(data.balance);
+                toast('✅ Order placed! It will be delivered in a few seconds.');
+                setTimeout(function () { window.location.href = 'orders.html'; }, 1400);
+            } catch (e) {
+                btn.disabled = false; btn.innerHTML = 'Place Order';
+                toast('⚠️ Connection failed. Please try again.');
+            }
+        }
+
+        function showFundSheet() {
+            var tg = localStorage.getItem('userTelegramId');
+            document.getElementById('fundNeed').textContent = '$' + (pendingBuy ? (pendingBuy.price * pendingBuy.qty).toFixed(2) : '0.00');
+            openSheet('fundSheet');
+            loadBalance().then(function (b) { document.getElementById('fundBal').textContent = '$' + (b || 0).toFixed(2); });
+        }
+
+        function openSheet(id) { document.getElementById(id).style.display = 'flex'; }
+        function closeSheet(id) { document.getElementById(id).style.display = 'none'; }
+        document.getElementById('buyBtn').addEventListener('click', placeOrder);
+        window.addEventListener('click', function (e) {
+            ['buySheet', 'fundSheet'].forEach(function (id) {
+                if (e.target === document.getElementById(id)) closeSheet(id);
+            });
+        });
+
+        function toast(msg) {
+            var box = document.getElementById('toastBox');
+            document.getElementById('toastText').innerHTML = msg;
+            box.style.display = 'flex';
+            clearTimeout(window.__tt);
+            window.__tt = setTimeout(function () { box.style.display = 'none'; }, 3200);
+        }
+
+        // ---------------- wallet ----------------
+        function paintBalanceValue(v) {
+            var el = document.getElementById('walletDisplay');
+            if (el) el.innerHTML = '$' + parseFloat(v || 0).toFixed(2);
+        }
+        async function loadBalance() {
+            var tg = localStorage.getItem('userTelegramId');
+            if (!tg) { paintBalanceValue(0); return 0; }
+            if (window.SBD && SBD.cacheGet) {
+                var c = SBD.cacheGet('balance:' + tg, true);
+                if (c && c.success) { paintBalanceValue(c.balance); return c.balance; }
+            }
+            try {
+                var res = await fetch('api_balance.php?telegram_id=' + encodeURIComponent(tg));
+                var d = await res.json();
+                if (d && d.success) {
+                    paintBalanceValue(d.balance);
+                    if (window.SBD && SBD.cacheSet) SBD.cacheSet('balance:' + tg, d, 300000);
+                    return d.balance;
+                }
+            } catch (e) {}
+            return 0;
+        }
+        document.addEventListener('DOMContentLoaded', function () {
+            paintCategory();
+            paintPlans();
+            loadBalance();
+            if (window.SBD && SBD.poll) SBD.poll(loadBalance, 15000);
+        });
+
+        function openSupport(e) {
+            if (e) e.preventDefault();
+            var m = document.getElementById('supportModal');
+            if (m) m.style.display = 'flex';
+        }
+        function closeSupportModal() { document.getElementById('supportModal').style.display = 'none'; }
+        window.onclick = function (event) {
+            var sm = document.getElementById('supportModal');
+            if (event.target === sm && sm) closeSupportModal();
+        };
+    </script>
+
+    <!-- Support Modal -->
+    <div class="support-overlay" id="supportModal" style="display:none">
+        <div class="support-box">
+            <div class="close-modal" onclick="closeSupportModal()"><i class="fa-solid fa-times"></i></div>
+            <h3><i class="fa-solid fa-headset"></i> Live Support</h3>
+            <div class="support-desc">Choose a platform to contact us.</div>
+            <a href="https://wa.me/8801618202470" target="_blank" rel="noopener" class="support-btn btn-wa"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>
+            <a href="https://t.me/SH_5617" target="_blank" rel="noopener" class="support-btn btn-tg"><i class="fa-brands fa-telegram"></i> Telegram</a>
+        </div>
+    </div>
+</body>
+</html>

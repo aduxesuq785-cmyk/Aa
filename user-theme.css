@@ -1,0 +1,153 @@
+/* =====================================================================
+   SOHAG BD SHOP — shared theme layer (user-theme.css)
+   ---------------------------------------------------------------------
+   This file is loaded by every page through a <link rel="stylesheet">.
+   Each page also carries its own inline <style> block with the layout
+   that is unique to it; the rules below are the *shared* visual layer
+   (colour tokens, glow, category-card shading, stagger animations…)
+   that the pages were written against but which was missing from the
+   repository.  Rules are kept additive so they never fight the inline
+   styles of any page.
+   ===================================================================== */
+
+:root {
+    --c1: #00f2fe;   /* cyan   */
+    --c2: #4facfe;   /* blue   */
+    --c3: #a855f7;   /* violet */
+    --c4: #ff0844;   /* rose   */
+    --c5: #ffb199;   /* peach  */
+    --c6: #2ecc71;   /* green  */
+    --c7: #f7b733;   /* amber  */
+    --ink: #e8f2ff;
+    --muted: #93a4bd;
+    --bg-deep: #0f111a;
+    --card-bg: #171c28;
+    --line: rgba(255, 255, 255, 0.08);
+    --ease: cubic-bezier(.22, .85, .24, 1);
+}
+
+/* ---------- smooth rendering & baseline ---------- */
+html { scroll-behavior: smooth; }
+body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+::selection { background: rgba(0, 242, 254, 0.28); color: #fff; }
+
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-track { background: #0b0e16; }
+*::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #1e2b44, #2c3c5c); border-radius: 8px; }
+*::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #00f2fe, #4facfe); }
+
+/* =====================================================================
+   Category cards — the small extras the index / shop pages expect
+   (.card-badge chip, .img-shade overlay and .px-stagger entrance)
+   ===================================================================== */
+.card-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: linear-gradient(135deg, rgba(0, 242, 254, .95), rgba(79, 172, 254, .95));
+    color: #04121f;
+    font-size: 10.5px;
+    font-weight: 900;
+    letter-spacing: .6px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    box-shadow: 0 4px 14px rgba(0, 200, 230, .35);
+    text-transform: uppercase;
+}
+
+.img-shade {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(15, 17, 26, 0) 40%, rgba(15, 17, 26, .85) 100%);
+    pointer-events: none;
+}
+
+/* Staggered entrance used by grids across pages */
+.px-stagger > * {
+    animation: pxFadeUp .55s var(--ease) both;
+}
+.px-stagger > *:nth-child(2)  { animation-delay: .05s; }
+.px-stagger > *:nth-child(3)  { animation-delay: .10s; }
+.px-stagger > *:nth-child(4)  { animation-delay: .15s; }
+.px-stagger > *:nth-child(5)  { animation-delay: .20s; }
+.px-stagger > *:nth-child(6)  { animation-delay: .25s; }
+.px-stagger > *:nth-child(7)  { animation-delay: .30s; }
+.px-stagger > *:nth-child(8)  { animation-delay: .35s; }
+.px-stagger > *:nth-child(9)  { animation-delay: .40s; }
+.px-stagger > *:nth-child(10) { animation-delay: .45s; }
+.px-stagger > *:nth-child(n+11) { animation-delay: .50s; }
+
+@keyframes pxFadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Login / OTP reveal helper */
+.reveal { animation: pxFadeUp .4s var(--ease) both; }
+
+/* =====================================================================
+   Shared glow utilities
+   ===================================================================== */
+.glow-cyan   { text-shadow: 0 0 18px rgba(0, 242, 254, .65); }
+.glow-blue   { text-shadow: 0 0 18px rgba(79, 172, 254, .65); }
+
+/* Toast used by account / deposite / pending pages that define their own
+   position rules inline — this only guarantees a sane baseline. */
+.toast i { margin-right: 6px; }
+
+/* Support modal (used across pages; the main pages style it inline — this is
+   the shared baseline so any page that links the stylesheet gets a working box) */
+.support-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(4, 6, 10, 0.78);
+    backdrop-filter: blur(4px);
+    z-index: 1500;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+.support-box {
+    background: #141a28;
+    border: 1px solid rgba(0, 242, 254, 0.28);
+    border-radius: 18px;
+    padding: 22px 18px;
+    width: 100%;
+    max-width: 340px;
+    text-align: center;
+    position: relative;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+    animation: pxFadeUp .3s var(--ease);
+}
+.support-box h3 { font-size: 18px; margin-bottom: 4px; color: #e8f2ff; }
+.support-desc { color: #93a4bd; font-size: 13px; margin-bottom: 16px; }
+.support-box .close-modal {
+    position: absolute; top: 10px; right: 12px;
+    color: #93a4bd; cursor: pointer; font-size: 17px;
+}
+.support-box .close-modal:hover { color: #ff0844; }
+.support-btn {
+    display: flex; align-items: center; justify-content: center; gap: 9px;
+    padding: 12px; border-radius: 12px; font-weight: 800; font-size: 14.5px;
+    text-decoration: none; color: #fff; margin-bottom: 10px; transition: .2s;
+}
+.support-btn:hover { transform: translateY(-1px); filter: brightness(1.1); }
+.btn-wa { background: linear-gradient(135deg, #25d366, #128c7e); }
+.btn-tg { background: linear-gradient(135deg, #2aabee, #229ed9); }
+
+/* =====================================================================
+   Accessibility
+   ===================================================================== */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: .001s !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .001s !important;
+        scroll-behavior: auto !important;
+    }
+}
