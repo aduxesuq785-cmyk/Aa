@@ -1,27 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""ARIYAN: both original HTML pages bundled in one Python 3 file.
+"""Ariyan: single-file MongoDB storefront and secret-key admin panel.
 
+Install: pip install -r requirements.txt
 Run: python Ariyan.py
-User: http://127.0.0.1:8000/
-Admin: http://127.0.0.1:8000/admin
 Railway Start Command: python Ariyan.py
-Railway/Python hosts: put a requirements.txt containing only a comment beside this file
-to enable Python detection. No third-party dependencies are required.
-Default bind: 0.0.0.0; PORT is read from the environment (fallback: 8000).
-Local-only option: python Ariyan.py --host 127.0.0.1
-Optional custom port: python Ariyan.py --port 8080
-Health check path: /healthz
-Domain target ports must match the listening port printed at startup.
-No pip packages or separate HTML files are required.
-The original Firebase backend and external assets still require internet.
-HTML, CSS, JavaScript, configuration and existing behavior are preserved.
+Edit MONGODB_URI and ADMIN_SECRET_KEY below to change the connection/login.
+Optional environment: MONGODB_DB, PORT (8000), ARIYAN_HOST (0.0.0.0)
+Routes: / (shop), /admin (secret-key login), /healthz (database readiness)
+Requires Python 3.10+. Existing data/accounts are not automatically imported.
 """
 
-import argparse
-import os
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlsplit
+# EDIT THESE TWO VALUES WHEN NEEDED (server-side settings only).
+MONGODB_URI = "mongodb+srv://jefife9396_db_user:4of4BVIWuUe1RdIE@testting32.kmq0dm2.mongodb.net/?appName=Testting32"
+ADMIN_SECRET_KEY = "892559967"
 
 USER_HTML = r"""<!DOCTYPE html>
 <html lang="en">
@@ -2833,26 +2825,12 @@ USER_HTML = r"""<!DOCTYPE html>
     <i class="fas fa-arrow-up"></i>
   </div>
 
-  <!-- Firebase SDK -->
+  <!-- Python / MongoDB API -->
+  <script src="/api/client.js?panel=user"></script>
   <script type="module">
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js';
-    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js';
-    import { getDatabase, ref, set, get, push, onValue, remove, update, query, orderByChild, limitToLast } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js';
-
-    const firebaseConfig = {
-    apiKey: "AIzaSyBY19bfyTxQKV9qp_mGAPhJOVpUgy-v6R8",
-  authDomain: "cipher-pro-store.firebaseapp.com",
-  databaseURL: "https://cipher-pro-store-default-rtdb.firebaseio.com",
-  projectId: "cipher-pro-store",
-  storageBucket: "cipher-pro-store.firebasestorage.app",
-  messagingSenderId: "445639151152",
-  appId: "1:445639151152:web:93cbca2068849284cd67f5",
-  measurementId: "G-BZRH898NCH"
-};
-
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getDatabase(app);
+    const {auth, db, ref, set, get, push, remove, onValue, update, off,
+      query, orderByChild, limitToLast, onAuthStateChanged,
+      createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile} = window.Ariyan;
 
     window.auth = auth;
     window.db = db;
@@ -2881,6 +2859,7 @@ USER_HTML = r"""<!DOCTYPE html>
 
     // Check auth state
     onAuthStateChanged(auth, (user) => {
+      if (window.chatUnsubscribe) {window.chatUnsubscribe(); window.chatUnsubscribe = null;}
       window.currentUser = user;
       updateMenu();
       loadProducts();
@@ -2911,7 +2890,7 @@ USER_HTML = r"""<!DOCTYPE html>
 
     loadBrandSettings();
 
-    // Real-time listeners for products
+    // Live product updates
     onValue(ref(db, 'products'), (snapshot) => {
       if (snapshot.exists()) {
         window.allProducts = Object.entries(snapshot.val()).map(([id, product]) => ({
@@ -2919,7 +2898,7 @@ USER_HTML = r"""<!DOCTYPE html>
           ...product
         }));
         displayProducts(window.allProducts);
-      }
+      } else {window.allProducts = []; displayProducts([]);}
     });
   </script>
 
@@ -3942,59 +3921,14 @@ function applyFilter(products, filter) {
         const discount = window.appliedCoupon ? window.appliedCoupon.discount : 0;
         const total = subtotal + discount;
 
-        // Create orders for each product in cart
-        for (const item of window.cart) {
-          const orderRef = window.dbPush(window.dbRef(window.db, 'orders'));
-          const orderId = orderRef.key;
-
-          const orderData = {
-            productId: item.id,
-            amountPaid: amountPaid,
-            productSnapshot: {
-              title: item.title,
-              imageUrl: item.image,
-              discountedPrice: item.price
-            },
-            userInput: { 
-              utrId,
-              name: window.currentUser.displayName || 'N/A',
-              email: window.currentUser.email,
-              phone: 'N/A'
-            },
-            userId: window.currentUser.uid,
-            userEmail: window.currentUser.email,
-            couponUsed: window.appliedCoupon ? window.appliedCoupon.code : null,
-            discountAmount: window.appliedCoupon ? window.appliedCoupon.discount : 0,
-            finalAmount: total,
-            status: 'pending',
-            createdAt: new Date().toISOString()
-          };
-
-          await window.dbSet(orderRef, orderData);
-          
-          // Add to user's purchases
-          await window.dbSet(
-            window.dbRef(window.db, `users/${window.currentUser.uid}/purchases/${orderId}`),
-            {
-              orderId: orderId,
-              productId: item.id,
-              purchasedAt: new Date().toISOString()
-            }
-          );
-        }
-
-        // Update coupon usage if applied
-        if (window.appliedCoupon) {
-          const couponRef = window.dbRef(window.db, `coupons/${window.appliedCoupon.id}`);
-          const couponSnapshot = await window.dbGet(couponRef);
-          
-          if (couponSnapshot.exists()) {
-            const currentUsage = couponSnapshot.val().usedCount || 0;
-            await window.dbUpdate(couponRef, {
-              usedCount: currentUsage + 1
-            });
-          }
-        }
+        window.checkoutRequestId ||= crypto.randomUUID().replaceAll('-', '');
+        await window.Ariyan.api('checkout', {
+          requestId: window.checkoutRequestId,
+          items: window.cart.map(item => ({id:item.id})),
+          amountPaid, utrId,
+          couponCode: window.appliedCoupon ? window.appliedCoupon.code : null
+        });
+        window.checkoutRequestId = null;
 
         hideLoading();
 
@@ -4262,7 +4196,8 @@ function applyFilter(products, filter) {
       try {
         const chatRef = window.dbRef(window.db, `chats/${window.currentUser.uid}/messages`);
         
-        window.dbOnValue(chatRef, (snapshot) => {
+        if(window.chatUnsubscribe) window.chatUnsubscribe();
+        window.chatUnsubscribe = window.dbOnValue(chatRef, (snapshot) => {
           const messagesContainer = document.getElementById('chatMessages');
           messagesContainer.innerHTML = '';
 
@@ -5322,7 +5257,7 @@ Once payment is completed, the download link for your purchased digital item (HT
     ║   ✓ Smooth Animations                 ║
     ║   ✓ Mobile Responsive                 ║
     ║                                       ║
-    ║   Connected to Firebase ✅            ║
+    ║   Connected to MongoDB ✅            ║
     ║                                       ║
     ╚═══════════════════════════════════════╝
     `);
@@ -5338,7 +5273,7 @@ Once payment is completed, the download link for your purchased digital item (HT
     }
   </script>
 </body>
-</html>""".encode("utf-8")
+</html>"""
 
 ADMIN_HTML = r"""<!DOCTYPE html>
 <html lang="en">
@@ -7388,57 +7323,22 @@ ADMIN_HTML = r"""<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- Login Screen -->
-  <div id="loginScreen" class="login-container" style="display: none;">
+  <!-- Secret-key login -->
+  <div id="loginScreen" class="login-container" style="display:flex;">
     <div class="login-card">
-      <h1 class="login-title">Admin Panel</h1>
-      <div id="loginError" style="display: none;" class="error-message"></div>
+      <h1 class="login-title"><i class="fas fa-shield-alt"></i> Admin Panel</h1>
+      <p style="text-align:center;color:#b8b8cc;margin-bottom:22px;">Enter your secret key to continue</p>
+      <div id="loginError" style="display:none;" class="error-message"></div>
       <div class="input-group">
-        <label><i class="fas fa-envelope"></i> Email</label>
-        <input type="email" id="loginEmail" placeholder="admin@example.com" autocomplete="email">
+        <label for="adminSecretKey"><i class="fas fa-key"></i> Secret Key</label>
+        <input type="password" id="adminSecretKey" placeholder="Enter secret key" autocomplete="current-password">
       </div>
-      <div class="input-group">
-        <label><i class="fas fa-lock"></i> Password</label>
-        <input type="password" id="loginPassword" placeholder="Enter password" autocomplete="current-password">
-      </div>
-      <button class="btn" id="loginBtn">Login</button>
-    </div>
-  </div>
-
-  <!-- Setup Screen -->
-  <div id="setupScreen" class="login-container" style="display: none;">
-    <div class="login-card">
-      <h1 class="login-title"><i class="fas fa-rocket"></i> First Time Setup</h1>
-      <p style="text-align: center; color: #00ffff; margin-bottom: 20px; line-height: 1.6;">
-        Welcome! No admin account exists yet.<br>
-        Create your first admin account to get started.
-      </p>
-      <div id="setupError" style="display: none;" class="error-message"></div>
-      <div class="input-group">
-        <label><i class="fas fa-user"></i> Admin Name</label>
-        <input type="text" id="setupName" placeholder="Enter your name" autocomplete="name">
-      </div>
-      <div class="input-group">
-        <label><i class="fas fa-envelope"></i> Email</label>
-        <input type="email" id="setupEmail" placeholder="admin@example.com" autocomplete="email">
-      </div>
-      <div class="input-group">
-        <label><i class="fas fa-lock"></i> Password (min 8 characters)</label>
-        <input type="password" id="setupPassword" placeholder="Create password" autocomplete="new-password">
-      </div>
-      <div class="input-group">
-        <label><i class="fas fa-lock"></i> Confirm Password</label>
-        <input type="password" id="setupConfirmPassword" placeholder="Confirm password" autocomplete="new-password">
-      </div>
-      <button class="btn" id="setupBtn">Create Admin Account</button>
-      <p style="text-align: center; color: #999; margin-top: 15px; font-size: 14px;">
-        This will be the master admin account
-      </p>
+      <button class="btn" id="loginBtn">Unlock Admin Panel</button>
     </div>
   </div>
 
   <!-- Admin Dashboard -->
-  <div id="adminDashboard" class="admin-container">
+  <div id="adminDashboard" class="admin-container" style="display:none;">
     <div class="header">
       <div class="brand-section">
         <img id="headerLogo" class="brand-logo" src="" alt="Logo" style="display:none;">
@@ -7807,19 +7707,19 @@ ADMIN_HTML = r"""<!DOCTYPE html>
           </div>
           <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
             <span style="color: #999;"><i class="fas fa-database"></i> Database:</span>
-            <span style="color: #00ffff; font-weight: bold;">Firebase Realtime</span>
+            <span style="color: #00ffff; font-weight: bold;">MongoDB</span>
           </div>
           <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
             <span style="color: #999;"><i class="fas fa-clock"></i> Last Login:</span>
             <span style="color: #00ffff; font-weight: bold;" id="lastLoginTime">-</span>
           </div>
           <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-            <span style="color: #999;"><i class="fas fa-envelope"></i> Admin Email:</span>
+            <span style="color: #999;"><i class="fas fa-envelope"></i> Access:</span>
             <span style="color: #00ffff; font-weight: bold;" id="adminEmailDisplay">-</span>
           </div>
           <div style="display: flex; justify-content: space-between;">
-            <span style="color: #999;"><i class="fas fa-key"></i> Admin Password:</span>
-            <span style="color: #00ffff; font-weight: bold;" id="adminPasswordDisplay">••••••••</span>
+            <span style="color: #999;"><i class="fas fa-key"></i> Authentication:</span>
+            <span style="color: #00ffff; font-weight: bold;" id="adminPasswordDisplay">Secret Key</span>
           </div>
         </div>
       </div>
@@ -7871,26 +7771,12 @@ ADMIN_HTML = r"""<!DOCTYPE html>
     <i class="fas fa-arrow-up"></i>
   </button>
 
-  <!-- Firebase SDK -->
+  <!-- Python / MongoDB API -->
+  <script src="/api/client.js?panel=admin"></script>
   <script type="module">
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js';
-    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, updateProfile } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js';
-    import { getDatabase, ref, set, get, push, remove, onValue, update, off } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js';
-
-    const firebaseConfig = {
-    apiKey: "AIzaSyBY19bfyTxQKV9qp_mGAPhJOVpUgy-v6R8",
-  authDomain: "cipher-pro-store.firebaseapp.com",
-  databaseURL: "https://cipher-pro-store-default-rtdb.firebaseio.com",
-  projectId: "cipher-pro-store",
-  storageBucket: "cipher-pro-store.firebasestorage.app",
-  messagingSenderId: "445639151152",
-  appId: "1:445639151152:web:93cbca2068849284cd67f5",
-  measurementId: "G-BZRH898NCH"
-};
-
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getDatabase(app);
+    const {auth, db, ref, set, get, push, remove, onValue, update, off,
+      query, orderByChild, limitToLast, onAuthStateChanged,
+      createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile} = window.Ariyan;
 
     window.auth = auth;
     window.db = db;
@@ -7929,35 +7815,10 @@ ADMIN_HTML = r"""<!DOCTYPE html>
       }, duration);
     }
 
-    async function checkAdminSetup() {
-      try {
-        showLoadingOverlay('Checking admin setup...');
-        
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Connection timeout')), 10000)
-        );
-        
-        const dataPromise = get(ref(db, 'meta/adminSetup/completed'));
-        const snapshot = await Promise.race([dataPromise, timeoutPromise]);
-        
-        hideLoadingOverlay();
-        
-        if (snapshot.exists() && snapshot.val() === true) {
-          document.getElementById('setupScreen').style.display = 'none';
-          document.getElementById('loginScreen').style.display = 'flex';
-          document.getElementById('menuToggle').classList.add('hidden');
-        } else {
-          document.getElementById('setupScreen').style.display = 'flex';
-          document.getElementById('loginScreen').style.display = 'none';
-          document.getElementById('menuToggle').classList.add('hidden');
-        }
-      } catch (error) {
-        console.error('Error checking admin setup:', error);
-        hideLoadingOverlay();
-        document.getElementById('setupScreen').style.display = 'flex';
-        document.getElementById('loginScreen').style.display = 'none';
-        document.getElementById('menuToggle').classList.add('hidden');
-      }
+    function checkAdminSetup() {
+      hideLoadingOverlay();
+      document.getElementById('loginScreen').style.display = 'flex';
+      document.getElementById('menuToggle').classList.add('hidden');
     }
 
     function setupRealtimeListeners() {
@@ -8007,9 +7868,8 @@ ADMIN_HTML = r"""<!DOCTYPE html>
     }
 
     onAuthStateChanged(auth, (user) => {
-      if (user) {
+      if (user && user.role === 'admin') {
         hideLoadingOverlay();
-        document.getElementById('setupScreen').style.display = 'none';
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('adminDashboard').style.display = 'block';
         document.getElementById('fab').style.display = 'flex';
@@ -8017,10 +7877,10 @@ ADMIN_HTML = r"""<!DOCTYPE html>
         
         const displayName = user.displayName || 'Admin User';
         document.getElementById('drawerUserName').textContent = displayName;
-        document.getElementById('drawerUserEmail').textContent = user.email;
+        document.getElementById('drawerUserEmail').textContent = 'Secret key access';
         
         document.getElementById('lastLoginTime').textContent = new Date().toLocaleString('en-IN');
-        document.getElementById('adminEmailDisplay').textContent = user.email;
+        document.getElementById('adminEmailDisplay').textContent = 'Administrator';
         document.getElementById('settingsDisplayName').value = displayName;
         
         loadBrandSettings();
@@ -8200,134 +8060,21 @@ ADMIN_HTML = r"""<!DOCTYPE html>
       }
     });
 
-    async function setupAdmin() {
-      const name = document.getElementById('setupName').value.trim();
-      const email = document.getElementById('setupEmail').value.trim();
-      const password = document.getElementById('setupPassword').value.trim();
-      const confirmPassword = document.getElementById('setupConfirmPassword').value.trim();
-
-      document.getElementById('setupError').style.display = 'none';
-
-      if (!name || !email || !password || !confirmPassword) {
-        showMessage('setupError', 'Please fill all fields', 'error');
-        return;
-      }
-
-      if (!isValidEmail(email)) {
-        showMessage('setupError', 'Please enter a valid email address', 'error');
-        return;
-      }
-
-      if (password.length < 8) {
-        showMessage('setupError', 'Password must be at least 8 characters', 'error');
-        return;
-      }
-
-      if (password !== confirmPassword) {
-        showMessage('setupError', 'Passwords do not match', 'error');
-        return;
-      }
-
-      const btn = document.getElementById('setupBtn');
-      btn.disabled = true;
-      btn.innerHTML = '<span class="loading-spinner"></span>Creating Account...';
-
-      try {
-        const userCredential = await window.createUserWithEmailAndPassword(window.auth, email, password);
-        
-        await window.updateProfile(userCredential.user, {
-          displayName: name
-        });
-
-        await window.dbSet(window.dbRef(window.db, 'meta/adminSetup'), {
-          completed: true,
-          adminEmail: email,
-          adminName: name,
-          adminPassword: password,
-          setupDate: new Date().toISOString()
-        });
-
-        showMessage('setupError', 'Admin account created successfully!', 'success');
-        
-        document.getElementById('setupName').value = '';
-        document.getElementById('setupEmail').value = '';
-        document.getElementById('setupPassword').value = '';
-        document.getElementById('setupConfirmPassword').value = '';
-        
-      } catch (error) {
-        let errorMsg = 'Setup failed: ';
-        switch(error.code) {
-          case 'auth/email-already-in-use':
-            errorMsg += 'This email is already registered';
-            break;
-          case 'auth/invalid-email':
-            errorMsg += 'Invalid email format';
-            break;
-          case 'auth/weak-password':
-            errorMsg += 'Password is too weak';
-            break;
-          default:
-            errorMsg += error.message;
-        }
-        showMessage('setupError', errorMsg, 'error');
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = 'Create Admin Account';
-      }
-    }
-
-    document.getElementById('setupBtn')?.addEventListener('click', setupAdmin);
-
     async function login() {
-      const email = document.getElementById('loginEmail').value.trim();
-      const password = document.getElementById('loginPassword').value.trim();
-
+      const input = document.getElementById('adminSecretKey');
+      const key = input.value;
       document.getElementById('loginError').style.display = 'none';
-
-      if (!email || !password) {
-        showMessage('loginError', 'Please enter email and password', 'error');
-        return;
-      }
-
-      if (!isValidEmail(email)) {
-        showMessage('loginError', 'Please enter a valid email address', 'error');
-        return;
-      }
-
+      if (!key) {showMessage('loginError', 'Please enter your secret key', 'error'); return;}
       const btn = document.getElementById('loginBtn');
-      btn.disabled = true;
-      btn.innerHTML = '<span class="loading-spinner"></span>Logging in...';
-
-      try {
-        await window.signInWithEmailAndPassword(window.auth, email, password);
-      } catch (error) {
-        let errorMsg = 'Login failed: ';
-        switch(error.code) {
-          case 'auth/user-not-found':
-            errorMsg += 'No account found with this email';
-            break;
-          case 'auth/wrong-password':
-            errorMsg += 'Incorrect password';
-            break;
-          case 'auth/invalid-email':
-            errorMsg += 'Invalid email format';
-            break;
-          case 'auth/too-many-requests':
-            errorMsg += 'Too many failed attempts. Please try again later';
-            break;
-          default:
-            errorMsg += error.message;
-        }
-        showMessage('loginError', errorMsg, 'error');
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = 'Login';
-      }
+      btn.disabled = true; btn.textContent = 'Checking...';
+      try {await window.Ariyan.adminLogin(key); input.value = '';}
+      catch(error) {showMessage('loginError', error.message, 'error');}
+      finally {btn.disabled = false; btn.textContent = 'Unlock Admin Panel';}
     }
 
     document.getElementById('loginBtn')?.addEventListener('click', login);
 
-    ['loginEmail', 'loginPassword'].forEach(id => {
+    ['adminSecretKey'].forEach(id => {
       document.getElementById(id)?.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
           login();
@@ -8413,14 +8160,6 @@ ADMIN_HTML = r"""<!DOCTYPE html>
 
         document.getElementById('dashTotalCoupons').textContent = activeCoupons;
 
-        const adminSetupSnapshot = await window.dbGet(window.dbRef(window.db, 'meta/adminSetup'));
-        if (adminSetupSnapshot.exists()) {
-          const adminData = adminSetupSnapshot.val();
-          if (adminData.adminPassword) {
-            document.getElementById('adminPasswordDisplay').textContent = adminData.adminPassword;
-          }
-        }
-        
       } catch (error) {
         console.error('Error updating stats:', error);
       }
@@ -10225,9 +9964,9 @@ ADMIN_HTML = r"""<!DOCTYPE html>
     setTimeout(() => {
       if (window.auth.currentUser) {
         console.log(`%c🎉 Welcome to Admin Panel v3.0.0 Premium! 🎉`, 'color: #00ffff; font-size: 20px; font-weight: bold;');
-        console.log(`%cLogged in as: ${window.auth.currentUser.email}`, 'color: #a855f7; font-size: 14px;');
+        
         console.log(`%c💡 Tip: Use Ctrl+K to quickly search in any section`, 'color: #00ff88; font-size: 12px;');
-        console.log(`%c🚀 New Features: Product Screenshots, User Support Chat, Password Display`, 'color: #ffa500; font-size: 12px;');
+        console.log(`%c🚀 New Features: Product Screenshots, User Support Chat, Secret Key Access`, 'color: #ffa500; font-size: 12px;');
       }
     }, 2000);
 
@@ -10236,76 +9975,569 @@ ADMIN_HTML = r"""<!DOCTYPE html>
     console.log('%c• Product Screenshots Support', 'color: #00ff88; font-size: 12px;');
     console.log('%c• User Support Chat with Edit/Delete', 'color: #00ff88; font-size: 12px;');
     console.log('%c• Order Delete Functionality', 'color: #00ff88; font-size: 12px;');
-    console.log('%c• Admin Password Display in Settings', 'color: #00ff88; font-size: 12px;');
+    console.log('%c• Admin Secret Key Access in Settings', 'color: #00ff88; font-size: 12px;');
     console.log('%c• Removed Email & Phone from Orders', 'color: #00ff88; font-size: 12px;');
     console.log('%c• Removed Export Orders Button', 'color: #00ff88; font-size: 12px;');
     console.log('%c• Drawer Hidden on Login/Setup Screen', 'color: #00ff88; font-size: 12px;');
   </script>
 </body>
-</html>""".encode("utf-8")
+</html>"""
 
-PAGES = {
-    "/": USER_HTML,
-    "/index.html": USER_HTML,
-    "/user": USER_HTML,
-    "/user/": USER_HTML,
-    "/user.html": USER_HTML,
-    "/admin": ADMIN_HTML,
-    "/admin/": ADMIN_HTML,
-    "/admin.html": ADMIN_HTML,
-}
+CLIENT_JS = r"""(() => {
+  const panel = new URL(document.currentScript.src).searchParams.get('panel') || 'user';
+  const listeners = new Set();
+  const authListeners = new Set();
+  const auth = {currentUser: null};
+  let ready = false;
+  async function api(route, payload = {}) {
+    const response = await fetch('/api/' + route, {
+      method: 'POST', credentials: 'same-origin',
+      headers: {'Content-Type': 'application/json', 'X-Ariyan-Request': '1'},
+      body: JSON.stringify({...payload, panel})
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      const error = new Error(data.error || 'Request failed');
+      error.code = data.code || 'request/failed';
+      throw error;
+    }
+    return data;
+  }
+  function emit(user) {
+    auth.currentUser = user;
+    ready = true;
+    for (const callback of authListeners) { try { callback(user); } catch(e) { console.error(e); } }
+  }
+  function onAuthStateChanged(_auth, callback) {
+    authListeners.add(callback);
+    if (ready) queueMicrotask(() => callback(auth.currentUser));
+    return () => authListeners.delete(callback);
+  }
+  auth.onAuthStateChanged = callback => onAuthStateChanged(auth, callback);
+  function snapshot(value, key = null) {
+    return {key, val: () => value, exists: () => value !== null && value !== undefined,
+      forEach: fn => { for (const [k,v] of Object.entries(value || {})) { if(fn(snapshot(v,k)) === true) break; } }};
+  }
+  const ref = (_db, path) => ({path, key: path.split('/').pop()});
+  async function get(r) {
+    const data = await api('data', {op:'get', path:r.path});
+    let value = data.value;
+    if (r.constraints && value) {
+      let entries = Object.entries(value);
+      for (const c of r.constraints) {
+        if (c.order) entries.sort((a,b) => String(a[1][c.order] ?? '').localeCompare(String(b[1][c.order] ?? '')));
+        if (c.limit) entries = entries.slice(-c.limit);
+      }
+      value = Object.fromEntries(entries);
+    }
+    return snapshot(value, r.key);
+  }
+  async function write(op,r,value) {
+    await api('data',{op,path:r.path,value});
+    for (const l of listeners) l.poll();
+  }
+  function onValue(r, callback, errorCallback) {
+    let closed = false, busy = false, timer, last;
+    const l = {path:r.path, poll: async () => {
+      if(closed || busy) return;
+      clearTimeout(timer); busy = true;
+      try {
+        const s = await get(r), current = JSON.stringify(s.val());
+        if (!closed && current !== last) {last = current; callback(s);}
+      } catch(e) { if(errorCallback) errorCallback(e); else console.error(e.message); }
+      finally {busy = false; if(!closed) timer = setTimeout(l.poll, document.hidden ? 15000 : 3000);}
+    }, stop: () => {closed = true; clearTimeout(timer); listeners.delete(l);}};
+    listeners.add(l); l.poll(); return l.stop;
+  }
+  function off(r) {for(const l of [...listeners]) if(l.path === r.path) l.stop();}
+  async function login(route, data) {const out = await api(route,data); emit(out.user); return {user:out.user};}
+  const bridge = {
+    auth, db:{}, ref, get,
+    set:(r,v)=>write('set',r,v), update:(r,v)=>write('update',r,v), remove:r=>write('remove',r),
+    push:r=>ref(null, r.path+'/'+crypto.randomUUID().replaceAll('-','')),
+    onValue,off,query:(r,...constraints)=>({...r,constraints}),
+    orderByChild:order=>({order}),limitToLast:limit=>({limit}),onAuthStateChanged,
+    createUserWithEmailAndPassword:(_a,email,password)=>login('auth/signup',{email,password}),
+    signInWithEmailAndPassword:(_a,email,password)=>login('auth/login',{email,password}),
+    signOut:async()=>{await api('auth/logout'); for(const l of [...listeners]) if(!['products','meta/brand','meta/contact'].includes(l.path)) l.stop(); emit(null);},
+    updateProfile:async(_user,profile)=>{const out=await api('auth/profile',profile);emit(out.user);},
+    adminLogin:key=>login('auth/admin',{key}),api
+  };
+  window.Ariyan = bridge;
+  window.auth = auth;
+  api('auth/me').then(data=>emit(data.user)).catch(e=>{emit(null);console.error(e.message);});
+})();
+"""
+
+import argparse
+import hashlib
+import hmac
+import json
+import logging
+import math
+import os
+import re
+import secrets
+import threading
+import time
+from datetime import datetime, timedelta, timezone
+
+from flask import Flask, jsonify, request
+from pymongo import MongoClient, ReturnDocument
+from pymongo.errors import DuplicateKeyError, PyMongoError
+from waitress import serve
+from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.security import check_password_hash, generate_password_hash
+
+app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+_DB = None
+_DB_LOCK = threading.Lock()
+ROOTS = {'products', 'orders', 'coupons', 'users', 'chats', 'meta', 'gamePlays'}
+ID_PATTERN = re.compile(r'^[A-Za-z0-9_-]{1,100}$')
 
 
-class AriyanHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self._serve(send_body=True)
+class APIError(Exception):
+    def __init__(self, message, status=400, code='request/invalid'):
+        self.message, self.status, self.code = message, status, code
 
-    def do_HEAD(self):
-        self._serve(send_body=False)
 
-    def _serve(self, send_body):
-        path = urlsplit(self.path).path
-        body = PAGES.get(path)
-        content_type = "text/html; charset=utf-8"
-        if path == "/healthz":
-            body = b'{"status":"ok"}'
-            content_type = "application/json; charset=utf-8"
-        status = 200
-        if body is None:
-            status = 404
-            body = b"<!doctype html><title>404</title><h1>Page not found</h1>"
-        self.send_response(status)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-cache")
-        self.end_headers()
-        if send_body:
-            self.wfile.write(body)
+def now():
+    return datetime.now(timezone.utc)
+
+
+def stamp():
+    return now().isoformat().replace('+00:00', 'Z')
+
+
+def database():
+    global _DB
+    if _DB is not None:
+        return _DB
+    with _DB_LOCK:
+        if _DB is None:
+            uri = MONGODB_URI
+            if not uri:
+                raise APIError('Set MONGODB_URI at the top of Ariyan.py, then restart the service.', 503)
+            if not uri.startswith(('mongodb://', 'mongodb+srv://')):
+                raise APIError('MONGODB_URI must start with mongodb:// or mongodb+srv://.', 503)
+            client = MongoClient(uri, serverSelectionTimeoutMS=8000, connectTimeoutMS=8000)
+            name = os.environ.get('MONGODB_DB')
+            db = client[name] if name else client.get_default_database(default='ariyan_code_bazar')
+            client.admin.command('ping')
+            db.accounts.create_index('email', unique=True)
+            db.sessions.create_index('expiresAt', expireAfterSeconds=0)
+            db.login_limits.create_index('expiresAt', expireAfterSeconds=0)
+            db.orders.create_index([('value.userId', 1), ('value.status', 1), ('value.productId', 1)])
+            _DB = db
+    return _DB
+
+
+def payload():
+    value = request.get_json(silent=True)
+    if not isinstance(value, dict):
+        raise APIError('A JSON object is required.')
+    return value
+
+
+def cookie_name():
+    return 'ariyan_admin' if payload().get('panel') == 'admin' else 'ariyan_user'
+
+
+def identity(required=False):
+    token = request.cookies.get(cookie_name(), '')
+    entry = database().sessions.find_one({'_id': hashlib.sha256(token.encode()).hexdigest(), 'expiresAt': {'$gt': now()}}) if token else None
+    user = entry.get('user') if entry else None
+    if user and user['role'] == 'user' and not database().accounts.find_one({'_id': user['uid']}):
+        user = None
+    if required and not user:
+        raise APIError('Please log in again.', 401, 'auth/required')
+    return user
+
+
+def public_user(user):
+    if not user:
+        return None
+    return {key: user.get(key, '') for key in ('uid', 'email', 'displayName', 'role')}
+
+
+def login_response(user):
+    token = secrets.token_urlsafe(32)
+    seconds = 12*3600 if user['role'] == 'admin' else 7*86400
+    database().sessions.insert_one({'_id': hashlib.sha256(token.encode()).hexdigest(), 'user': public_user(user), 'expiresAt': now()+timedelta(seconds=seconds)})
+    response = jsonify(user=public_user(user))
+    response.set_cookie(cookie_name(), token, max_age=seconds, httponly=True, secure=request.is_secure, samesite='Lax', path='/')
+    return response
+
+
+def throttle():
+    # Shared MongoDB counters also apply across multiple worker instances.
+    address = request.remote_addr or 'unknown'
+    bucket = int(time.time()) // 300
+    key = hashlib.sha256((address+request.path+str(bucket)).encode()).hexdigest()
+    entry = database().login_limits.find_one_and_update({'_id':key}, {'$inc':{'count':1}, '$setOnInsert':{'expiresAt':now()+timedelta(minutes=10)}}, upsert=True, return_document=ReturnDocument.AFTER)
+    if entry['count'] > 20:
+        raise APIError('Too many attempts. Try again in five minutes.', 429, 'auth/too-many-requests')
+
+
+@app.errorhandler(APIError)
+def api_error(error):
+    return jsonify(error=error.message, code=error.code), error.status
+
+
+@app.errorhandler(PyMongoError)
+def mongo_error(error):
+    logging.error('MongoDB operation failed (%s).', type(error).__name__)
+    return jsonify(error='MongoDB connection or operation failed. Check MONGODB_URI, database credentials and network access.', code='database/unavailable'), 503
+
+
+@app.errorhandler(413)
+def too_large(error):
+    return jsonify(error='Request is too large.'), 413
+
+
+@app.before_request
+def protect_api():
+    if request.path.startswith('/api/') and request.method == 'POST':
+        if request.headers.get('X-Ariyan-Request') != '1' or not request.is_json:
+            raise APIError('Invalid request.', 403)
+        # No cross-origin API access. The custom header also forces a CORS preflight.
+        origin = request.headers.get('Origin')
+        if origin and origin != request.host_url.rstrip('/'):
+            raise APIError('Cross-origin request rejected.', 403)
+
+
+@app.after_request
+def headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+@app.get('/')
+@app.get('/user')
+@app.get('/user/')
+@app.get('/user.html')
+@app.get('/index.html')
+def shop_page():
+    return USER_HTML
+
+
+@app.get('/admin')
+@app.get('/admin/')
+@app.get('/admin.html')
+def admin_page():
+    return ADMIN_HTML
+
+
+@app.get('/api/client.js')
+def client_script():
+    return app.response_class(CLIENT_JS, mimetype='application/javascript')
+
+
+@app.get('/healthz')
+def health():
+    database().command('ping')
+    return jsonify(status='ok', database='mongodb')
+
+
+@app.post('/api/auth/me')
+def auth_me():
+    return jsonify(user=public_user(identity()))
+
+
+@app.post('/api/auth/admin')
+def auth_admin():
+    data = payload()
+    if data.get('panel') != 'admin':
+        raise APIError('Use the admin login page.', 403)
+    throttle()
+    key = data.get('key')
+    if not isinstance(key, str) or len(key) > 1024:
+        raise APIError('Incorrect secret key.', 401)
+    valid = hmac.compare_digest(key.encode(), ADMIN_SECRET_KEY.encode())
+    if not valid:
+        raise APIError('Incorrect secret key.', 401)
+    doc = database().settings.find_one({'_id':'admin_profile'}) or {}
+    return login_response({'uid':'admin','email':'','displayName':doc.get('name','Admin'),'role':'admin'})
+
+
+def credentials():
+    data = payload()
+    if data.get('panel') == 'admin':
+        raise APIError('Admin access requires the secret key.', 403)
+    email, password = data.get('email'), data.get('password')
+    if not isinstance(email, str) or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email) or len(email)>254:
+        raise APIError('Please enter a valid email.', code='auth/invalid-email')
+    if not isinstance(password,str) or not 6 <= len(password) <= 256:
+        raise APIError('Password must have 6 to 256 characters.', code='auth/weak-password')
+    return email.strip().lower(), password
+
+
+@app.post('/api/auth/signup')
+def auth_signup():
+    email, password = credentials()
+    throttle()
+    uid = secrets.token_hex(16)
+    account = {'_id':uid,'email':email,'displayName':'','passwordHash':generate_password_hash(password),'createdAt':stamp()}
+    try:
+        database().accounts.insert_one(account)
+    except DuplicateKeyError:
+        raise APIError('This email is already registered.',409,'auth/email-already-in-use')
+    database().users.update_one({'_id':uid},{'$setOnInsert':{'value':{'profile':{'email':email,'name':'','createdAt':stamp()}}}},upsert=True)
+    return login_response({'uid':uid,'email':email,'displayName':'','role':'user'})
+
+
+@app.post('/api/auth/login')
+def auth_login():
+    email, password = credentials()
+    throttle()
+    account = database().accounts.find_one({'email':email})
+    if not account or not check_password_hash(account['passwordHash'],password):
+        raise APIError('Email or password is incorrect.',401,'auth/wrong-password')
+    return login_response({'uid':account['_id'],'email':email,'displayName':account.get('displayName',''),'role':'user'})
+
+
+@app.post('/api/auth/logout')
+def auth_logout():
+    token = request.cookies.get(cookie_name(),'')
+    if token:
+        database().sessions.delete_one({'_id':hashlib.sha256(token.encode()).hexdigest()})
+    response = jsonify(ok=True)
+    response.delete_cookie(cookie_name(),path='/')
+    return response
+
+
+@app.post('/api/auth/profile')
+def auth_profile():
+    user = identity(True)
+    name = payload().get('displayName')
+    if not isinstance(name,str) or not 1 <= len(name.strip()) <= 100:
+        raise APIError('Enter a name of 1 to 100 characters.')
+    name = name.strip()
+    if user['role']=='admin':
+        database().settings.update_one({'_id':'admin_profile'},{'$set':{'name':name}},upsert=True)
+    else:
+        database().accounts.update_one({'_id':user['uid']},{'$set':{'displayName':name}})
+        database().users.update_one({'_id':user['uid']},{'$set':{'value.profile.name':name}},upsert=True)
+    user['displayName']=name
+    database().sessions.update_many({'user.uid':user['uid']},{'$set':{'user.displayName':name}})
+    return jsonify(user=public_user(user))
+
+
+def path_parts(path):
+    if not isinstance(path,str):
+        raise APIError('Invalid data path.')
+    parts = path.split('/')
+    if not parts or parts[0] not in ROOTS or len(parts)>8 or not all(ID_PATTERN.fullmatch(p) for p in parts):
+        raise APIError('Invalid data path.')
+    return parts
+
+
+def clean_value(value, depth=0):
+    if depth>12:
+        raise APIError('Data is too deeply nested.')
+    if isinstance(value,dict):
+        if any(not isinstance(k,str) or not ID_PATTERN.fullmatch(k) or k in ('__proto__','constructor','prototype') for k in value):
+            raise APIError('Invalid data field.')
+        for v in value.values(): clean_value(v,depth+1)
+    elif isinstance(value,list):
+        for v in value: clean_value(v,depth+1)
+    elif isinstance(value,float) and not math.isfinite(value):
+        raise APIError('Invalid number.')
+
+
+def read_value(parts):
+    coll=database()[parts[0]]
+    if len(parts)==1:
+        return {d['_id']:d.get('value') for d in coll.find()} or None
+    doc=coll.find_one({'_id':parts[1]})
+    value=doc.get('value') if doc else None
+    for key in parts[2:]:
+        value=value.get(key) if isinstance(value,dict) else None
+    return value
+
+
+def write_value(parts,op,value):
+    coll=database()[parts[0]]
+    if len(parts)==1:
+        if op!='remove': raise APIError('Select an individual record.')
+        coll.delete_many({});return
+    key=parts[1]; field='.'.join(['value']+parts[2:])
+    if op=='remove' or value is None:
+        if len(parts)==2: coll.delete_one({'_id':key})
+        else: coll.update_one({'_id':key},{'$unset':{field:''}})
+    elif op=='set':
+        coll.update_one({'_id':key},{'$set':{field:value}},upsert=True)
+    elif op=='update':
+        if not isinstance(value,dict) or not value: raise APIError('Update must be a nonempty object.')
+        coll.update_one({'_id':key},{'$set':{field+'.'+k:v for k,v in value.items()}},upsert=True)
+
+
+def authorize_read(parts,user):
+    root=parts[0];admin=user and user['role']=='admin'
+    if admin: return
+    if root=='products': return
+    if root=='meta' and len(parts)>=2 and parts[1] in ('brand','contact'): return
+    if not user: raise APIError('Please log in.',401,'auth/required')
+    if root=='coupons': return
+    if root in ('users','chats','gamePlays') and len(parts)>=2 and parts[1]==user['uid']: return
+    if root=='orders' and len(parts)>=2:
+        order=read_value(parts[:2])
+        if order and order.get('userId')==user['uid']: return
+    raise APIError('Access denied.',403)
+
+
+def user_purchases(uid):
+    return {d['_id']:{'orderId':d['_id'],'productId':d['value']['productId'],'purchasedAt':d['value']['createdAt']} for d in database().orders.find({'value.userId':uid})} or None
+
+
+def filtered_products(parts,user):
+    value=read_value(parts[:2] if len(parts)>=2 else parts)
+    allowed=set()
+    if user:
+        allowed={d['value']['productId'] for d in database().orders.find({'value.userId':user['uid'],'value.status':'confirmed'})}
+    if len(parts)==1:
+        if value:
+            for key, product in value.items():
+                if key not in allowed and isinstance(product,dict): product.pop('downloadLink',None)
+        return value
+    if value and parts[1] not in allowed: value.pop('downloadLink',None)
+    for key in parts[2:]: value=value.get(key) if isinstance(value,dict) else None
+    return value
+
+
+def authorize_write(parts,op,value,user):
+    if user['role']=='admin': return value
+    root=parts[0];uid=user['uid']
+    if len(parts)<3 or parts[1]!=uid:
+        raise APIError('Admin access required.',403)
+    if root=='users':
+        if parts[2]=='bookmarks' and len(parts)==4:
+            if op!='remove' and not read_value(['products',parts[3]]): raise APIError('Product no longer exists.',404)
+            return value
+        if parts[2]=='profile' and len(parts)==3 and op in ('set','update') and isinstance(value,dict):
+            return {'name':user.get('displayName',''),'email':user['email'],'createdAt':(database().accounts.find_one({'_id':uid}) or {}).get('createdAt',stamp())}
+    if root=='chats':
+        if parts[2]=='messages' and len(parts)==4 and op=='set' and isinstance(value,dict):
+            message=value.get('message')
+            if not isinstance(message,str) or not 1<=len(message.strip())<=5000: raise APIError('Message must have 1 to 5000 characters.')
+            if read_value(parts) is not None: raise APIError('Message already exists.',409)
+            return {'message':message.strip(),'sender':'user','timestamp':stamp(),'userName':user.get('displayName') or user['email']}
+        if parts[2]=='info' and len(parts)==3 and op in ('set','update') and isinstance(value,dict):
+            return {'lastMessage':str(value.get('lastMessage',''))[:5000],'lastMessageTime':stamp(),'userName':user.get('displayName') or user['email'],'userEmail':user['email']}
+    if root=='gamePlays' and len(parts)==3 and op=='set':
+        if parts[2]=='lastPlayed': return int(time.time()*1000)
+        if parts[2]=='lastCoupon' and isinstance(value,str) and len(value)<=100: return value
+    raise APIError('Access denied.',403)
+
+
+@app.post('/api/data')
+def data_api():
+    data=payload();parts=path_parts(data.get('path'));op=data.get('op');user=identity()
+    if op=='get':
+        authorize_read(parts,user)
+        if parts[0]=='products' and not (user and user['role']=='admin'):
+            value=filtered_products(parts,user)
+        elif parts[0]=='users' and len(parts)>=3 and parts[2]=='purchases':
+            value=user_purchases(parts[1])
+            for key in parts[3:]: value=value.get(key) if isinstance(value,dict) else None
+        else:
+            value=read_value(parts)
+            if parts[0]=='users' and value:
+                if len(parts)==1:
+                    for uid, entry in value.items(): entry['purchases']=user_purchases(uid) or {}
+                elif len(parts)==2: value['purchases']=user_purchases(parts[1]) or {}
+        return jsonify(value=value)
+    if op not in ('set','update','remove'): raise APIError('Unknown operation.')
+    if not user: raise APIError('Please log in.',401,'auth/required')
+    value=data.get('value');clean_value(value)
+    value=authorize_write(parts,op,value,user)
+    write_value(parts,op,value)
+    if user['role']=='admin' and parts[0]=='users' and len(parts)==2 and op=='remove':
+        database().accounts.delete_one({'_id':parts[1]})
+        database().sessions.delete_many({'user.uid':parts[1]})
+    return jsonify(ok=True)
+
+
+def number(value):
+    try: result=float(value)
+    except (TypeError,ValueError): raise APIError('Invalid amount.')
+    if not math.isfinite(result) or result<0: raise APIError('Invalid amount.')
+    return result
+
+
+@app.post('/api/checkout')
+def checkout():
+    user=identity(True)
+    if user['role']!='user': raise APIError('Log in to a customer account to order.',403)
+    data=payload();reqid=data.get('requestId')
+    if not isinstance(reqid,str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,60}',reqid): raise APIError('Invalid checkout request ID.')
+    checkout_id=user['uid']+'_'+reqid
+    db=database();plan=db.checkouts.find_one({'_id':checkout_id})
+    if not plan:
+        items=data.get('items');utr=data.get('utrId');paid=number(data.get('amountPaid'))
+        if not isinstance(items,list) or not 1<=len(items)<=100 or paid<=0: raise APIError('Invalid cart or payment amount.')
+        if not isinstance(utr,str) or not re.fullmatch(r'[A-Za-z0-9]{10,16}',utr): raise APIError('UTR ID must have 10 to 16 letters or numbers.')
+        products=[]
+        for item in items:
+            pid=item.get('id') if isinstance(item,dict) else None
+            if not isinstance(pid,str) or not ID_PATTERN.fullmatch(pid): raise APIError('Invalid product.')
+            product=read_value(['products',pid])
+            if not product: raise APIError('A product is no longer available.',409)
+            products.append((pid,product,number(product.get('discountedPrice',product.get('realPrice')))))
+        subtotal=sum(p[2] for p in products);coupon=None;adjustment=0
+        code=data.get('couponCode')
+        if code:
+            if not isinstance(code,str) or len(code)>100: raise APIError('Invalid coupon.')
+            coupon=db.coupons.find_one({'value.code':code.upper()})
+            if not coupon: raise APIError('Coupon not found.')
+            c=coupon['value']
+            if not c.get('isActive') or (c.get('expiryDate') and datetime.fromisoformat(c['expiryDate'].replace('Z','+00:00')).replace(tzinfo=timezone.utc)<=now()): raise APIError('Coupon is inactive or expired.')
+            if subtotal<number(c.get('minAmount',0)): raise APIError('Minimum coupon amount has not been reached.')
+            adjustment=number(c.get('discountValue',0))
+            if c.get('discountType')=='percentage':
+                adjustment=subtotal*adjustment/100
+                maximum=number(c.get('maxDiscount',0))
+                if maximum: adjustment=min(adjustment,maximum)
+        orders={}
+        for i,(pid,product,price) in enumerate(products):
+            oid=user['uid']+'_'+reqid+'_'+str(i)
+            orders[oid]={'productId':pid,'amountPaid':paid,'productSnapshot':{'title':product.get('title',''),'imageUrl':product.get('imageUrl',''),'discountedPrice':price},'userInput':{'utrId':utr,'name':user.get('displayName') or 'N/A','email':user['email'],'phone':'N/A'},'userId':user['uid'],'userEmail':user['email'],'couponUsed':code,'discountAmount':round(adjustment,2),'finalAmount':round(subtotal+adjustment,2),'status':'pending','createdAt':stamp()}
+        # Keep the supplied shop's additive coupon calculation; amounts are computed on the server.
+        plan={'_id':checkout_id,'orders':orders,'couponId':coupon['_id'] if coupon else None,'couponLimit':int(coupon['value'].get('usageLimit',0) or 0) if coupon else 0,'createdAt':stamp()}
+        try: db.checkouts.insert_one(plan)
+        except DuplicateKeyError: plan=db.checkouts.find_one({'_id':checkout_id})
+    if plan.get('completed'): return jsonify(ok=True,orderIds=list(plan['orders']))
+    if plan.get('couponId'):
+        condition={'_id':plan['couponId'],'redeemed':{'$ne':checkout_id}}
+        if plan['couponLimit']>0:
+            condition['$or']=[{'value.usedCount':{'$lt':plan['couponLimit']}},{'value.usedCount':{'$exists':False}}]
+        reserved=db.coupons.update_one(condition,{'$inc':{'value.usedCount':1},'$addToSet':{'redeemed':checkout_id}})
+        if not reserved.modified_count and not db.coupons.find_one({'_id':plan['couponId'],'redeemed':checkout_id}):
+            raise APIError('Coupon usage limit reached or coupon removed.',409)
+    for oid,order in plan['orders'].items():
+        # Deterministic IDs make retries safe after a dropped connection.
+        existing=db.orders.find_one({'_id':oid})
+        if existing and existing['value']['userId']!=user['uid']: raise APIError('Checkout ID conflict; start a new checkout.',409)
+        db.orders.update_one({'_id':oid},{'$setOnInsert':{'value':order}},upsert=True)
+    db.checkouts.update_one({'_id':checkout_id},{'$set':{'completed':True}})
+    return jsonify(ok=True,orderIds=list(plan['orders']))
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run the bundled Ariyan website")
-    parser.add_argument("--host", default=os.environ.get("ARIYAN_HOST") or "0.0.0.0")
-    parser.add_argument("--port", type=int, default=os.environ.get("PORT") or "8000")
-    args = parser.parse_args()
-    if not 1 <= args.port <= 65535:
-        parser.error("port must be between 1 and 65535")
-    try:
-        server = ThreadingHTTPServer((args.host, args.port), AriyanHandler)
-    except OSError as exc:
-        parser.exit(1, f"Could not start server: {exc}\n")
-    print(f"Listening on {args.host}:{server.server_port}", flush=True)
-    display_host = "127.0.0.1" if args.host == "0.0.0.0" else args.host
-    print(f"User panel:  http://{display_host}:{args.port}/", flush=True)
-    print(f"Admin panel: http://{display_host}:{args.port}/admin", flush=True)
-    print("Press Ctrl+C to stop.", flush=True)
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\nServer stopped.")
-    finally:
-        server.server_close()
+    parser=argparse.ArgumentParser(description='Ariyan MongoDB website')
+    parser.add_argument('--host',default=os.environ.get('ARIYAN_HOST') or '0.0.0.0')
+    parser.add_argument('--port',type=int,default=os.environ.get('PORT') or '8000')
+    args=parser.parse_args()
+    if not 1<=args.port<=65535: parser.error('Port must be between 1 and 65535.')
+    print(f'Listening on {args.host}:{args.port}',flush=True)
+    print('User panel: / | Admin panel: /admin | Database health: /healthz',flush=True)
+    if not MONGODB_URI:
+        print('Configuration needed: edit MONGODB_URI at the top of Ariyan.py and restart. Pages load, but data and login require MongoDB.',flush=True)
+    serve(app,host=args.host,port=args.port,threads=8,channel_timeout=60)
 
 
-if __name__ == "__main__":
+if __name__=='__main__':
     main()
