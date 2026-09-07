@@ -106,6 +106,11 @@ def init_db():
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA journal_mode=WAL")
     db.execute("PRAGMA foreign_keys=ON")
+    # Lightweight migrations for existing installations
+    try:
+        db.execute("ALTER TABLE users ADD COLUMN telegram_username TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass
 
     # Create tables
     db.executescript('''
@@ -386,7 +391,7 @@ def init_db():
 
     # Insert default settings
     default_settings = [
-        ('site_name', 'SOHAG BD SHOP', 'text', 'Website Name'),
+        ('site_name', 'ARIYAN CODE BAZAR', 'text', 'Website Name'),
         ('site_tagline', 'Premium Digital Marketplace', 'text', 'Site Tagline'),
         ('site_description', 'Your one-stop digital marketplace for premium digital products', 'textarea', 'Site Description'),
         ('site_email', 'support@sohagbdshop.com', 'text', 'Support Email'),
@@ -416,6 +421,8 @@ def init_db():
             )
         except sqlite3.IntegrityError:
             pass
+
+    db.execute("UPDATE settings SET setting_value = 'ARIYAN CODE BAZAR' WHERE setting_key = 'site_name'")
 
     # Insert default admin
     try:
@@ -659,7 +666,7 @@ def inject_globals():
         'notification_count': notification_count,
         'now': datetime.datetime.utcnow(),
         'settings': {
-            'site_name': get_setting('site_name', 'SOHAG BD SHOP'),
+            'site_name': get_setting('site_name', 'ARIYAN CODE BAZAR'),
             'site_tagline': get_setting('site_tagline', 'Premium Digital Marketplace'),
             'currency_symbol': get_setting('currency_symbol', '৳'),
             'maintenance_mode': get_setting('maintenance_mode', '0'),
@@ -2303,6 +2310,11 @@ BASE_TEMPLATE = '''
             background: rgba(0, 242, 254, 0.1);
         }
 
+
+        .brand-mark,.brand-orbit { width:88px;height:88px;margin:0 auto 20px;border-radius:28px;display:flex;align-items:center;justify-content:center;font-size:48px;font-weight:900;color:#071018;background:linear-gradient(135deg,#00f2fe,#a855f7,#ff0844,#f59e0b);background-size:300% 300%;animation:logoRainbow 4s ease infinite;box-shadow:0 0 35px rgba(0,242,254,.45)}
+        @keyframes logoRainbow { 0%,100%{background-position:0% 50%;transform:rotate(-3deg)} 50%{background-position:100% 50%;transform:rotate(3deg)} }
+        .guest-hero{text-align:center;padding:15vh 20px}.guest-hero h1{font-size:clamp(34px,7vw,76px);letter-spacing:2px}.guest-hero h1 b{background:linear-gradient(90deg,#00f2fe,#a855f7,#ff0844);background-size:200%;animation:logoRainbow 4s ease infinite;background-clip:text;-webkit-background-clip:text;color:transparent}.guest-hero p{color:var(--text-secondary);font-size:18px;margin:15px 0 30px}.auth-gate{max-width:520px;margin:100px auto;text-align:center}.auth-gate .hero-actions{margin-top:25px}
+
         {% block extra_css %}{% endblock %}
     </style>
 </head>
@@ -2515,6 +2527,20 @@ BASE_TEMPLATE = '''
 # ============================================================
 # HOME PAGE TEMPLATE
 # ============================================================
+
+GUEST_HOME_TEMPLATE = r'''
+{% extends base %}
+{% block title %}{{ settings.site_name }}{% endblock %}
+{% block content %}
+<section class="guest-hero"><div class="brand-orbit"><span>A</span></div><h1>ARIYAN <b>CODE BAZAR</b></h1><p>Premium digital products, made simple.</p><div class="hero-actions"><a href="{{ url_for('login') }}" class="btn-outline btn-lg">Login</a><a href="{{ url_for('register') }}" class="btn-neon btn-lg">Signup</a></div></div>
+{% endblock %}
+'''
+
+AUTH_GATE_TEMPLATE = r'''
+{% extends base %}
+{% block title %}Login required - {{ settings.site_name }}{% endblock %}
+{% block content %}<div class="container"><div class="auth-gate glass-card"><div class="brand-mark">A</div><h2>Login or Signup to continue</h2><p class="text-secondary">Please create an account or login to view <b>{{ product_name }}</b>.</p><div class="hero-actions"><a class="btn-neon" href="{{ url_for('login', next=request.path) }}">Login</a><a class="btn-outline" href="{{ url_for('register') }}">Signup</a></div></div></div>{% endblock %}
+'''
 
 HOME_TEMPLATE = '''
 {% extends base %}
@@ -2799,57 +2825,27 @@ LOGIN_TEMPLATE = '''
 {% endblock %}
 '''
 
-REGISTER_TEMPLATE = '''
+REGISTER_TEMPLATE = r'''
 {% extends base %}
-{% block title %}Register - {{ settings.site_name }}{% endblock %}
+{% block title %}Signup - {{ settings.site_name }}{% endblock %}
 {% block content %}
 <div class="container-sm" style="padding-top:40px;padding-bottom:60px">
-    <div class="glass-card" style="max-width:480px;margin:0 auto">
-        <div class="text-center mb-3">
-            <div style="width:60px;height:60px;background:var(--gradient-primary);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:28px;color:#000;font-weight:900;margin:0 auto 16px">S</div>
-            <h2 style="font-size:24px;margin-bottom:8px">Create Account</h2>
-            <p class="text-secondary">Join {{ settings.site_name }} and start shopping</p>
-        </div>
-        <form method="POST" action="{{ url_for('register') }}">
-            <div class="form-group">
-                <label>Full Name</label>
-                <input type="text" name="full_name" class="form-input" placeholder="Enter your full name" required>
-            </div>
-            <div class="form-group">
-                <label>Username</label>
-                <input type="text" name="username" class="form-input" placeholder="Choose a username" required pattern="[a-zA-Z0-9_]+" minlength="3">
-            </div>
-            <div class="form-group">
-                <label>Email Address</label>
-                <input type="email" name="email" class="form-input" placeholder="Enter your email" required>
-            </div>
-            <div class="form-group">
-                <label>Phone Number</label>
-                <input type="text" name="phone" class="form-input" placeholder="Enter your phone number">
-            </div>
-            <div class="form-group">
-                <label>Password</label>
-                <input type="password" name="password" class="form-input" placeholder="Create a password" required minlength="6">
-            </div>
-            <div class="form-group">
-                <label>Confirm Password</label>
-                <input type="password" name="confirm_password" class="form-input" placeholder="Confirm your password" required>
-            </div>
-            <div class="form-group">
-                <label>Referral Code (Optional)</label>
-                <input type="text" name="referral_code" class="form-input" placeholder="Enter referral code" value="{{ request.args.get('ref', '') }}">
-            </div>
-            <button type="submit" class="btn-neon w-100 btn-lg">
-                <i class='bx bx-user-plus'></i> Create Account
-            </button>
-        </form>
-        <div class="text-center mt-3">
-            <p class="text-secondary" style="font-size:14px">Already have an account? <a href="{{ url_for('login') }}">Login</a></p>
-        </div>
-    </div>
+ <div class="glass-card" style="max-width:480px;margin:0 auto">
+  <div class="text-center mb-3"><div class="brand-mark">A</div><h2>Create Account</h2><p class="text-secondary">Join {{ settings.site_name }}</p></div>
+  <form method="POST">
+   <div class="form-group"><label>Full Name</label><input type="text" name="full_name" class="form-input" required></div>
+   <div class="form-group"><label>Telegram username</label><input type="text" name="telegram_username" class="form-input" placeholder="@username" required></div>
+   <div class="form-group"><label>Email</label><input type="email" name="email" class="form-input" required></div>
+   <div class="form-group"><label>Phone</label><input type="text" name="phone" class="form-input" required></div>
+   <div class="form-group"><label>Password</label><input type="password" name="password" class="form-input" required minlength="6"></div>
+   <div class="form-group"><label>Confirm Password</label><input type="password" name="confirm_password" class="form-input" required></div>
+   <button type="submit" class="btn-neon w-100 btn-lg"><i class="bx bx-user-plus"></i> Signup</button>
+  </form>
+  <div class="text-center mt-3"><p class="text-secondary">Already have an account? <a href="{{ url_for('login') }}">Login</a></p></div>
+ </div>
 </div>
 {% endblock %}
-'''
+''' 
 
 DASHBOARD_TEMPLATE = '''
 {% extends base %}
@@ -5531,6 +5527,8 @@ ADMIN_LOGS_TEMPLATE = '''
 def home():
     """Homepage with featured products and categories."""
     db = get_db()
+    if 'user_id' not in session:
+        return render_page(GUEST_HOME_TEMPLATE, BASE_TEMPLATE)
     categories = db.execute('''
         SELECT c.*, (SELECT COUNT(*) FROM products WHERE category_id = c.id AND is_active = 1) as product_count
         FROM categories c WHERE c.is_active = 1 ORDER BY c.sort_order, c.name
@@ -5599,15 +5597,16 @@ def register():
 
     if request.method == 'POST':
         full_name = request.form.get('full_name', '').strip()
-        username = request.form.get('username', '').strip()
+        telegram_username = request.form.get('telegram_username', '').strip()
+        username = re.sub(r'[^a-zA-Z0-9_]', '', telegram_username.lstrip('@')).lower() or f'user{secrets.token_hex(3)}'
         email = request.form.get('email', '').strip()
         phone = request.form.get('phone', '').strip()
         password = request.form.get('password', '')
         confirm_password = request.form.get('confirm_password', '')
-        referral_code = request.form.get('referral_code', '').strip()
+        referral_code = ''
 
         # Validation
-        if not all([full_name, username, email, password]):
+        if not all([full_name, telegram_username, email, phone, password]):
             flash('All required fields must be filled.', 'danger')
             return redirect(url_for('register'))
 
@@ -5641,9 +5640,9 @@ def register():
         # Create user
         user_referral_code = f"REF{secrets.token_hex(4).upper()}"
         db.execute('''
-            INSERT INTO users (username, email, password_hash, full_name, phone, referral_code, referred_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (username, email, generate_password_hash(password), full_name, phone, user_referral_code, referred_by))
+            INSERT INTO users (username, email, password_hash, full_name, phone, telegram_username, referral_code, referred_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (username, email, generate_password_hash(password), full_name, phone, telegram_username, user_referral_code, referred_by))
 
         user_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
 
@@ -5885,6 +5884,8 @@ def marketplace():
 @app.route('/product/<slug>')
 def product_detail(slug):
     """Product detail page."""
+    if 'user_id' not in session:
+        return render_page(AUTH_GATE_TEMPLATE, BASE_TEMPLATE, product_name=slug.replace('-', ' ').title())
     db = get_db()
     product = db.execute('''
         SELECT p.*, c.name as category_name, c.slug as category_slug
