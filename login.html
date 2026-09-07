@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>SOHAG BD SHOP | Login</title>
+    <!-- Favicon / App icons -->
+    <link rel="icon" href="/favicon.ico?v=2" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=2">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=2">
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png?v=2">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=2">
+    <link rel="manifest" href="/site.webmanifest?v=2">
+    <meta name="theme-color" content="#0f111a">
+    <meta name="theme-color" content="#06070d">
+    <!-- ⚡ Font Awesome non-blocking AND high priority.
+         Previously this used  media="print" , which does make it non-blocking — but the browser
+         also gives a print stylesheet the *lowest* possible download priority, so the icons
+         arrived last of all and popped in visibly late.  preload + onload swap is non-blocking
+         *and* high priority, so the icons are on screen with the first paint.
+         (This line, when it was plain <link rel="stylesheet">, was the root cause of the
+          "blank screen after login, fine after a reload" problem.) -->
+    <link rel="preload" as="style" href="fa-subset.css?v=3"
+          onload="this.rel='stylesheet'; this.onload=null;">
+    <!-- The icon font itself, fetched in parallel with the CSS instead of after it -->
+    <link rel="preload" as="font" type="font/woff2" crossorigin
+          href="fa-solid-900.woff2">
+    <noscript><link rel="stylesheet" href="fa-subset.css?v=3"></noscript>
+    <!-- 🚀 Shared page boot helper — why it is needed is documented in detail in app-boot.js -->
+    <script src="app-boot.js?v=3"></script>
+
+    <!-- Animated theme (colour tokens + reusable keyframes).
+         ⚠ On this page the theme file loads *before* <style>, because this login page needs its own
+         colours and animations to sit above everything else (this page has little content, so
+         the theme default vignette colour was overpowering them). -->
+    <link rel="preload" as="style" href="user-theme.css?v=6">
+    <link rel="stylesheet" href="user-theme.css?v=6">
+
+    <style>
+        /* ---------- 0. Tokens ---------- */
+        :root {
+            --c1: #00f2fe;   /* cyan   */
+            --c2: #4facfe;   /* blue   */
+            --c3: #a855f7;   /* violet */
+            --c4: #ff0844;   /* rose   */
+            --c5: #ffb199;   /* peach  */
+            --c6: #2ecc71;   /* green  */
+            --c7: #f7b733;   /* amber  */
+            --ink: #e8f2ff;
+            --muted: #93a4bd;
+            --ease: cubic-bezier(.22, .85, .24, 1);
+        }
+
+        /* ⚡ REMOVED:  @property --ring
+           It existed only for the halo's spinning conic gradient. Animating a custom
+           property that a conic-gradient is built from forces the browser to rebuild
+           that gradient image from scratch on every single frame — see section 3. */
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        /* =====================================================================
+           ⚡ 0b. Switch off the shared theme's background layers on THIS page
+           ---------------------------------------------------------------------
+           user-theme.css paints four full-viewport background layers
+           (html::before + html::after colour mesh, body::before grid,
+            body::after sheen). On this page they are all wasted work:
+
+             • The two html:: mesh layers sit at z-index -3/-2, which is *behind*
+               body's own background — and this page's body background is the
+               opaque #06070d above. So they were animating non-stop while being
+               completely invisible.
+             • The body:: grid and sheen are duplicates: this page already draws
+               its own .px-grid and .px-scan inside .px-scene.
+
+           Turning them off here removes four fixed-position, viewport-sized
+           animated layers from the very first page every visitor sees.
+           ===================================================================== */
+        html::before, html::after,
+        body::before, body::after {
+            content: none !important;
+            animation: none !important;
+            display: none !important;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Poppins', sans-serif;
+            background: #06070d;
+            color: var(--ink);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 26px 18px;
+            overflow-x: hidden;
+        }
+
+        /* =====================================================================
+           1. Animated colour scene  —  colourful orbs + grid + aurora + glints
+           ===================================================================== */
+        .px-scene {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            /* ⚡ blur is static, so it is rasterised once and then only moved by the
+               GPU. mix-blend-mode: screen was removed: a blend mode forces the
+               browser to re-composite the layer on the main thread on every frame,
+               which cancelled out will-change and made these five big blurred
+               circles one of the most expensive things on the page. Over a
+               near-black background screen-blending looked the same as normal
+               anyway, so the alpha was nudged up to match. */
+            filter: blur(48px);
+            will-change: transform;
+            backface-visibility: hidden;
+        }
+        .o1 { width: 48vmax; height: 48vmax; top: -14vmax; left: -12vmax;
+              background: radial-gradient(circle, rgba(0,242,254,.62), transparent 68%);
+              animation: orbA 19s var(--ease) infinite alternate; }
+        .o2 { width: 44vmax; height: 44vmax; top: -10vmax; right: -14vmax;
+              background: radial-gradient(circle, rgba(168,85,247,.62), transparent 68%);
+              animation: orbB 23s var(--ease) infinite alternate; }
+        .o3 { width: 46vmax; height: 46vmax; bottom: -16vmax; right: -10vmax;
+              background: radial-gradient(circle, rgba(255,8,68,.55), transparent 68%);
+              animation: orbC 21s var(--ease) infinite alternate; }
+        .o4 { width: 40vmax; height: 40vmax; bottom: -14vmax; left: -12vmax;
+              background: radial-gradient(circle, rgba(46,204,113,.52), transparent 68%);
+              animation: orbD 25s var(--ease) infinite alternate; }
+        .o5 { width: 30vmax; height: 30vmax; top: 38%; left: 34%;
+              background: radial-gradient(circle, rgba(247,183,51,.44), transparent 68%);
+              animation: orbE 17s var(--ease) infinite alternate; }
+
+        @keyframes orbA { to { transform: translate3d(16vmax, 12vmax, 0) scale(1.25); } }
+        @keyframes orbB { to { transform: translate3d(-14vmax, 16vmax, 0) scale(1.18); } }
+        @keyframes orbC { to { transform: translate3d(-16vmax, -13vmax, 0) scale(1.3); } }
+        @keyframes orbD { to { transform: translate3d(15vmax, -15vmax, 0) scale(1.22); } }
+        @keyframes orbE { to { transform: translate3d(-9vmax, 10vmax, 0) scale(1.4); } }
+
+        /* Rotating aurora rays.
+           ⚡ This was 190vmax square. On a 1080p screen that is a 3600×3600 layer —
+           roughly 50 MB of GPU memory for one decoration. It is now capped in
+           pixels, which is all that is needed to still cover the screen while it
+           turns, and the blur is lighter. */
+        .px-aurora {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: min(145vmax, 2000px);
+            height: min(145vmax, 2000px);
+            transform: translate(-50%, -50%);
+            background: conic-gradient(from 0deg,
+                transparent 0 6%,  rgba(0,242,254,.16)  14%, transparent 24%,
+                rgba(168,85,247,.17) 40%, transparent 52%,
+                rgba(255,8,68,.13)   66%, transparent 76%,
+                rgba(46,204,113,.15) 88%, transparent 100%);
+            filter: blur(16px);
+            will-change: transform;
+            backface-visibility: hidden;
+            animation: auroraSpin 44s linear infinite;
+        }
+        @keyframes auroraSpin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+
+        /* Neon grid — bright in the middle, fading out at the edges.
+           ⚡ The pan used to animate background-position, i.e. repaint the whole
+           screen every frame. The lines now live on a child that is shifted by
+           exactly one 46px tile with a transform, so the loop is seamless and the
+           GPU does all the work. The fade-out mask stays on the parent so it does
+           not travel along with the lines. */
+        .px-grid {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            -webkit-mask: radial-gradient(78% 66% at 50% 46%, #000 20%, transparent 100%);
+                    mask: radial-gradient(78% 66% at 50% 46%, #000 20%, transparent 100%);
+        }
+        .px-grid::before {
+            content: "";
+            position: absolute;
+            inset: -48px;
+            background:
+                repeating-linear-gradient(0deg,  rgba(255,255,255,.05) 0 1px, transparent 1px 46px),
+                repeating-linear-gradient(90deg, rgba(255,255,255,.05) 0 1px, transparent 1px 46px);
+            will-change: transform;
+            animation: gridPan 22s linear infinite;
+        }
+        @keyframes gridPan { to { transform: translate3d(46px, 46px, 0); } }
+
+        /* Diagonal flash of light — a narrow band slid across with a transform
+           instead of a full-screen background-position repaint. */
+        .px-scan {
+            position: absolute;
+            top: 0; left: 0;
+            width: 40%; height: 100%;
+            background: linear-gradient(112deg, transparent 0%, rgba(255,255,255,.07) 50%, transparent 100%);
+            will-change: transform;
+            animation: scanSweep 13s linear infinite;
+        }
+        @keyframes scanSweep {
+            0%   { transform: translate3d(-100%, 0, 0); }
+            100% { transform: translate3d(250%, 0, 0);  }
+        }
+
+        /* Floating colourful particles */
+        .dust {
+            position: absolute; border-radius: 50%; opacity: .75;
+            /* translate3d + backface-visibility hands these to the GPU, so the five
+               particles move without the main thread doing anything at all */
+            will-change: transform, opacity;
+            backface-visibility: hidden;
+        }
+        .dust:nth-child(6)  { width: 4px; height: 4px; top: 18%; left: 14%; background: var(--c1); animation: dustUp 12s linear infinite;      box-shadow: 0 0 10px var(--c1); }
+        .dust:nth-child(7)  { width: 3px; height: 3px; top: 72%; left: 26%; background: var(--c3); animation: dustUp 16s linear infinite 2s;   box-shadow: 0 0 10px var(--c3); }
+        .dust:nth-child(8)  { width: 5px; height: 5px; top: 40%; left: 82%; background: var(--c6); animation: dustUp 14s linear infinite 1s;   box-shadow: 0 0 12px var(--c6); }
+        .dust:nth-child(9)  { width: 3px; height: 3px; top: 86%; left: 66%; background: var(--c7); animation: dustUp 18s linear infinite 3.5s; box-shadow: 0 0 10px var(--c7); }
+        .dust:nth-child(10) { width: 4px; height: 4px; top: 58%; left: 8%;  background: var(--c4); animation: dustUp 15s linear infinite 5s;   box-shadow: 0 0 10px var(--c4); }
+        @keyframes dustUp {
+            0%   { transform: translate3d(0, 0, 0) scale(1);        opacity: 0; }
+            12%  { opacity: .85; }
+            88%  { opacity: .85; }
+            100% { transform: translate3d(0, -62vh, 0) scale(.4);   opacity: 0; }
+        }
+
+        /* =====================================================================
+           2. Card  +  rotating rainbow halo
+           ===================================================================== */
+        .card-wrap {
+            position: relative;
+            z-index: 2;
+            width: 100%;
+            max-width: 430px;
+            animation: cardIn .55s var(--ease) both;
+        }
+        /* ⚡ This used to animate filter: blur(7px) → blur(0) on the whole card.
+           A blur animation is one of the most expensive things to render, and it ran
+           at exactly the worst moment — while the page was still loading and the
+           user was waiting to see something. Only transform and opacity now, which
+           the GPU handles for free, so the card snaps in cleanly. */
+        @keyframes cardIn {
+            0%   { opacity: 0; transform: perspective(1000px) translate3d(0, 38px, 0) rotateX(10deg) scale(.94); }
+            100% { opacity: 1; transform: perspective(1000px) translate3d(0, 0, 0)    rotateX(0)     scale(1);   }
+        }
+
+        /* ⚡ The rainbow halo used to spin by animating the --ring angle of a conic
+           gradient that also had a 15px blur on it. That meant regenerating the
+           gradient AND redoing the blur on every single frame. The gradient is fixed
+           now — so the blur is computed once and cached — and the halo breathes with
+           an opacity animation, which costs nothing. */
+        .card-halo {
+            position: absolute;
+            inset: -3px;
+            border-radius: 2.15rem;
+            background: conic-gradient(from 210deg,
+                var(--c1), var(--c2), var(--c3), var(--c4), var(--c7), var(--c6), var(--c1));
+            filter: blur(15px);
+            opacity: .5;
+            will-change: opacity;
+            animation: haloBreathe 5s ease-in-out infinite;
+        }
+        @keyframes haloBreathe { 0%, 100% { opacity: .38; } 50% { opacity: .62; } }
+
+        .glass-card {
+            position: relative;
+            overflow: hidden;
+            /* 90–94% opaque, so backdrop-filter: blur(24px) was blurring something
+               nobody could see through — it was removed. */
+            background: linear-gradient(160deg, rgba(14,19,32,.94), rgba(9,11,20,.97));
+            border: 1px solid rgba(255,255,255,.1);
+            border-radius: 2rem;
+            padding: 2.1rem 1.6rem 1.7rem;
+            text-align: center;
+            box-shadow: 0 28px 64px rgba(0,0,0,.62), inset 0 1px 0 rgba(255,255,255,.07);
+            animation: none;   /* Theme pxRise dropped — this page uses cardIn instead */
+        }
+
+        /* Moving 7-colour strip across the top of the card */
+        .glass-card::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(90deg,
+                var(--c1), var(--c2), var(--c3), var(--c4), var(--c7), var(--c6), var(--c1));
+            background-size: 300% 100%;
+            animation: slide 6s linear infinite;
+            z-index: 3;
+        }
+        @keyframes slide { to { background-position: 300% 50%; } }
+
+        /* Soft colour glow inside the card */
+        .glass-card::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(60% 40% at 12% 0%,   rgba(0,242,254,.16), transparent 70%),
+                radial-gradient(56% 42% at 92% 6%,   rgba(168,85,247,.16), transparent 70%),
+                radial-gradient(70% 44% at 50% 108%, rgba(255,8,68,.13),  transparent 70%);
+            animation: innerWash 11s ease-in-out infinite alternate;
+        }
+        @keyframes innerWash { 0% { opacity: .7; } 100% { opacity: 1; } }
+
+        .card-inner { position: relative; z-index: 2; }
+
+        /* =====================================================================
+           3. Stagger reveal
+           -----------------------------------------------------------------
+           ⚠ Children that have their own looping animation (logo, button, icon) must
+             restate the whole list including `riseIn` in their rule, because the `animation`
+             shorthand resets the entire previous value.
+             The delays are kept at the very end of the stylesheet (section 10),
+             so those shorthands do not wipe the delays out.
+           ===================================================================== */
+        .reveal > * { animation: riseIn .65s var(--ease) both; }
+        @keyframes riseIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
+
+        /* =====================================================================
+           4. Brand block
+           ===================================================================== */
+        .brand-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 5px 13px;
+            border-radius: 30px;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: .9px;
+            text-transform: uppercase;
+            color: #04121a;
+            background: linear-gradient(90deg, var(--c1), var(--c6), var(--c1));
+            background-size: 250% 100%;
+            animation: riseIn .65s var(--ease) both, slide 5s linear infinite;
+            box-shadow: 0 6px 18px rgba(0,242,254,.32);
+        }
+        .brand-pill i { font-size: 10px; }
+
+        .telegram-icon {
+            position: relative;
+            display: grid;
+            place-items: center;
+            width: 84px; height: 84px;
+            margin: 1.1rem auto .8rem;
+            font-size: 2.5rem;
+            color: #29b6f6;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 30%, rgba(0,136,204,.35), rgba(0,136,204,.06) 70%);
+            border: 1px solid rgba(41,182,246,.35);
+            filter: drop-shadow(0 0 16px rgba(0,136,204,.6));
+            animation: riseIn .65s var(--ease) both, float 4s ease-in-out infinite .65s;
+        }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+
+        /* Ring rippling out around the icon */
+        .telegram-icon::before,
+        .telegram-icon::after {
+            content: "";
+            position: absolute;
+            inset: -2px;
+            border-radius: 50%;
+            border: 1px solid rgba(0,242,254,.5);
+            animation: pulseRing 3s ease-out infinite;
+        }
+        .telegram-icon::after { animation-delay: 1.5s; }
+        @keyframes pulseRing {
+            0%   { transform: scale(.85); opacity: .8; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        /* Brand name — clamp() keeps it from breaking on small screens.
+           The mobile rule in user-theme.css carries `.logo { font-size: 17px !important }`
+           so !important is used here to override it. */
+        .logo {
+            font-size: clamp(1.3rem, 6.2vw, 1.85rem) !important;
+            font-weight: 900;
+            letter-spacing: .5px;
+            white-space: nowrap;
+            background: linear-gradient(90deg, var(--c1), #ffffff, var(--c3), var(--c1));
+            background-size: 300% 100%;
+            -webkit-background-clip: text;
+                    background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+            animation: riseIn .65s var(--ease) both, slide 6s linear infinite;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            font-size: .82rem;
+            margin-bottom: 1.3rem;
+            letter-spacing: .2px;
+        }
+
+        /* =====================================================================
+           5. Step box
+           ===================================================================== */
+        .step-box {
+            position: relative;
+            overflow: hidden;
+            background: rgba(255,255,255,.04);
+            border: 1px solid rgba(255,255,255,.09);
+            border-radius: 16px;
+            padding: 15px 15px 13px;
+            margin-bottom: 1.3rem;
+            text-align: left;
+            transition: border-color .35s ease, box-shadow .35s ease, transform .35s var(--ease);
+        }
+        .step-box:hover {
+            transform: translateY(-3px);
+            border-color: rgba(0,242,254,.35);
+            box-shadow: 0 14px 30px rgba(0,242,254,.12);
+        }
+        .step-box::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, var(--c1), var(--c3), var(--c4), var(--c1));
+            background-size: 280% 100%;
+            animation: slide 5s linear infinite;
+        }
+        .step-box p {
+            display: flex;
+            align-items: center;
+            font-size: .78rem;
+            color: #a7b6cc;
+            margin: 9px 0;
+            line-height: 1.5;
+        }
+        .step-box strong { color: var(--c1); }
+
+        .step-number {
+            flex: 0 0 auto;
+            display: inline-grid;
+            place-items: center;
+            width: 24px; height: 24px;
+            border-radius: 50%;
+            font-size: 11px;
+            font-weight: 900;
+            color: #04121a;
+            margin-right: 10px;
+            background: linear-gradient(90deg, var(--c1), var(--c3), var(--c1));
+            background-size: 250% 100%;
+            animation: slide 4s linear infinite;
+            box-shadow: 0 0 12px rgba(0,242,254,.45);
+        }
+
+        /* =====================================================================
+           6. Code input
+           ===================================================================== */
+        .code-input {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(0,0,0,.42);
+            border: 1px solid rgba(0,242,254,.26);
+            border-radius: 16px;
+            padding: 15px 16px;
+            margin-bottom: .9rem;
+            transition: border-color .3s ease, box-shadow .3s ease, background .3s ease;
+        }
+        .code-input i {
+            font-size: 1.05rem;
+            color: var(--c1);
+            transition: transform .35s var(--ease), color .3s ease;
+        }
+        .code-input input {
+            flex: 1;
+            min-width: 0;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--c1);
+            font-size: 1rem;
+            font-family: 'Consolas', 'Courier New', monospace;
+            letter-spacing: 2px;
+            text-align: center;
+        }
+        .code-input input::placeholder { color: #45566e; letter-spacing: normal; }
+
+        /* The inner input does not need the theme focus glow — the glow is shown on the wrapper */
+        .code-input input:focus { box-shadow: none; }
+
+        .code-input.focused {
+            border-color: var(--c1);
+            background: rgba(0,242,254,.06);
+            box-shadow: 0 0 0 3px rgba(0,242,254,.13), 0 0 22px rgba(0,242,254,.22);
+        }
+        .code-input.focused i { transform: rotate(-16deg) scale(1.15); }
+
+        /* Green confirm look once the code is entered */
+        .code-input.filled {
+            border-color: rgba(46,204,113,.6);
+            box-shadow: 0 0 0 3px rgba(46,204,113,.12), 0 0 20px rgba(46,204,113,.2);
+        }
+        .code-input.filled i { color: var(--c6); }
+        .code-input.filled input { color: var(--c6); }
+
+        /* =====================================================================
+           7. Buttons
+           ===================================================================== */
+        .btn {
+            position: relative;
+            overflow: hidden;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            padding: 15px;
+            border: none;
+            border-radius: 16px;
+            font-size: .96rem;
+            font-weight: 800;
+            letter-spacing: .3px;
+            font-family: inherit;
+            cursor: pointer;
+            text-decoration: none;
+            transition: transform .22s var(--ease), box-shadow .3s ease, filter .3s ease;
+        }
+        .btn:active { transform: scale(.96); }
+
+        /* Light sweeping through the button.
+           ⚡ Was an animation on  left , which makes the browser redo the layout on
+           every frame; a transform never touches the layout. */
+        .btn::after {
+            content: "";
+            position: absolute;
+            top: 0; left: -130%;
+            width: 45%; height: 100%;
+            background: linear-gradient(100deg, transparent, rgba(255,255,255,.5), transparent);
+            transform: translate3d(0, 0, 0) skewX(-20deg);
+            animation: shine 4.5s ease-in-out infinite;
+            pointer-events: none;
+        }
+        @keyframes shine { 0%, 68% { transform: translate3d(0, 0, 0) skewX(-20deg); } 100% { transform: translate3d(678%, 0, 0) skewX(-20deg); } }
+
+        /* ⚠ .btn.btn-primary — the `.btn:not(.btn-telegram)` rule in
+           user-theme.css has specificity (0,2,0), so two classes are needed here too
+           otherwise our gradient animation gets overridden. */
+        .btn.btn-primary {
+            color: #04121a;
+            background-image: linear-gradient(90deg, var(--c1), var(--c2), var(--c3), var(--c2), var(--c1));
+            background-size: 300% 100%;
+            animation: riseIn .65s var(--ease) both,
+                       slide 8s linear infinite;
+            /* Steady glow instead of a box-shadow animation: animating a shadow
+               repaints the button and the area around it on every frame. */
+            box-shadow: 0 8px 22px rgba(0,242,254,.3);
+        }
+        .btn.btn-primary:hover { transform: translateY(-2px); filter: brightness(1.12); box-shadow: 0 10px 30px rgba(0,242,254,.42); }
+        .btn.btn-primary:disabled { opacity: .65; cursor: not-allowed; transform: none; }
+        .btn.btn-primary:disabled::after { display: none; }
+
+        .btn-telegram {
+            margin-bottom: 1.1rem;
+            color: #4fc3f7;
+            background: rgba(0,136,204,.1);
+            border: 1px solid rgba(41,182,246,.45);
+        }
+        .btn-telegram::after { animation-duration: 6s; }
+        .btn-telegram:hover {
+            transform: translateY(-2px);
+            color: #fff;
+            background: rgba(0,136,204,.22);
+            box-shadow: 0 12px 26px rgba(0,136,204,.3);
+        }
+
+        /* =====================================================================
+           8. Message / footer / toast / spinner
+           ===================================================================== */
+        .error-msg   { color: #ff6b8a; font-size: .78rem; min-height: 1rem; margin-bottom: .5rem; }
+        .success-msg { color: var(--c1); font-size: .78rem; }
+
+        .secure-note {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            margin-top: 1.2rem;
+            font-size: .7rem;
+            letter-spacing: .3px;
+            color: #6d7f96;
+        }
+        .secure-note i { color: var(--c6); animation: glowText 2.6s ease-in-out infinite; }
+        @keyframes glowText { 0%, 100% { opacity: .65; } 50% { opacity: 1; } }
+
+        .toast {
+            position: fixed;
+            top: 22px; left: 50%;
+            padding: 13px 24px;
+            border-radius: 30px;
+            font-weight: 800;
+            font-size: 13.5px;
+            z-index: 9999;
+            box-shadow: 0 14px 34px rgba(0,0,0,.55);
+            animation: toastIn .45s var(--ease) both;
+        }
+        .toast-success { background: linear-gradient(90deg, var(--c1), var(--c6)); color: #04121a; }
+        .toast-error   { background: linear-gradient(90deg, var(--c4), #ff6b8a);   color: #fff; }
+        @keyframes toastIn {
+            0%   { opacity: 0; transform: translateX(-50%) translateY(-22px) scale(.88); }
+            60%  { opacity: 1; transform: translateX(-50%) translateY(0)     scale(1.04); }
+            100% { opacity: 1; transform: translateX(-50%) translateY(0)     scale(1); }
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 17px; height: 17px;
+            border: 2px solid rgba(4,18,26,.35);
+            border-top-color: #04121a;
+            border-radius: 50%;
+            animation: spin .6s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* =====================================================================
+           9. Two-step login  —  step 1 (ID)  and  step 2 (OTP code)
+           -----------------------------------------------------------------
+           Only one step is visible at a time. Switching steps plays a gentle slide-in.
+           ===================================================================== */
+        .step { display: none; }
+        .step.active { display: block; animation: stepIn .45s var(--ease) both; }
+        @keyframes stepIn {
+            from { opacity: 0; transform: translateX(18px); }
+            to   { opacity: 1; transform: none; }
+        }
+
+        /* "Code sent ..." message */
+        .sent-note {
+            background: rgba(46,204,113,.08);
+            border: 1px solid rgba(46,204,113,.28);
+            border-radius: 14px;
+            padding: 12px 14px;
+            margin-bottom: 1.15rem;
+            font-size: .78rem;
+            line-height: 1.6;
+            color: #b9c9dd;
+            text-align: left;
+        }
+        .sent-note b { color: var(--c6); }
+        .sent-note .tg-chip {
+            display: inline-block;
+            padding: 1px 8px;
+            border-radius: 20px;
+            font-family: 'Consolas', monospace;
+            font-size: .76rem;
+            color: var(--c1);
+            background: rgba(0,242,254,.1);
+            border: 1px solid rgba(0,242,254,.25);
+        }
+
+        /* ---------- OTP boxes ---------- */
+        .otp-row {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: .9rem;
+        }
+        .otp-cell {
+            /* 6 or 8 digits — fits neatly on mobile either way */
+            width: clamp(32px, 11.5vw, 46px);
+            height: clamp(44px, 15vw, 56px);
+            padding: 0;
+            text-align: center;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: clamp(1.05rem, 4.6vw, 1.4rem);
+            font-weight: 800;
+            color: var(--c1);
+            background: rgba(0,0,0,.42);
+            border: 1px solid rgba(0,242,254,.26);
+            border-radius: 12px;
+            outline: none;
+            -moz-appearance: textfield;
+            transition: border-color .25s ease, box-shadow .25s ease,
+                        transform .25s var(--ease), color .25s ease;
+        }
+        .otp-cell::-webkit-outer-spin-button,
+        .otp-cell::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+        .otp-cell:focus {
+            border-color: var(--c1);
+            background: rgba(0,242,254,.07);
+            box-shadow: 0 0 0 3px rgba(0,242,254,.13), 0 0 20px rgba(0,242,254,.2);
+            transform: translateY(-2px);
+        }
+        .otp-cell.filled { border-color: rgba(46,204,113,.6); color: var(--c6); }
+        .otp-cell.err    { border-color: var(--c4); color: #ff6b8a;
+                           box-shadow: 0 0 0 3px rgba(255,8,68,.12); }
+
+        /* ---------- Timer + resend ---------- */
+        .otp-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: .55rem;
+            font-size: .73rem;
+            color: #7d8ea6;
+        }
+        .otp-meta i { margin-right: 4px; }
+        #ttlLeft { font-family: 'Consolas', monospace; color: var(--c7); font-weight: 700; }
+        #ttlLeft.low { color: #ff6b8a; }
+
+        .link-btn {
+            background: none;
+            border: none;
+            padding: 4px 2px;
+            font: inherit;
+            font-size: .73rem;
+            font-weight: 700;
+            color: var(--c1);
+            cursor: pointer;
+            letter-spacing: .2px;
+            transition: color .2s ease, opacity .2s ease;
+        }
+        .link-btn:hover:not(:disabled) { color: #fff; text-decoration: underline; }
+        .link-btn:disabled { color: #56677e; cursor: not-allowed; }
+
+        .back-link {
+            display: block;
+            width: 100%;
+            margin-top: .85rem;
+            color: var(--muted);
+        }
+        .back-link:hover { color: var(--c1); }
+
+        /* =====================================================================
+           10. Stagger delays  —  at the very end of the stylesheet, so the
+               `animation:` shorthands above do not reset these delays
+           ===================================================================== */
+        .reveal > *:nth-child(1)  { animation-delay: .18s; }
+        .reveal > *:nth-child(2)  { animation-delay: .24s; }
+        .reveal > *:nth-child(3)  { animation-delay: .30s; }
+        .reveal > *:nth-child(4)  { animation-delay: .36s; }
+        .reveal > *:nth-child(5)  { animation-delay: .42s; }
+        .reveal > *:nth-child(6)  { animation-delay: .48s; }
+        .reveal > *:nth-child(7)  { animation-delay: .54s; }
+        .reveal > *:nth-child(8)  { animation-delay: .60s; }
+        .reveal > *:nth-child(9)  { animation-delay: .66s; }
+        .reveal > *:nth-child(10) { animation-delay: .72s; }
+
+        /* =====================================================================
+           11. Responsive and accessibility
+           ===================================================================== */
+        /* ⚡ Phones do the same amount of animation work on a GPU many times weaker than
+           a desktop's, so the scene is thinned out rather than just scaled down.
+           768px is used (not 420px) because that covers every phone in portrait. */
+        @media (max-width: 768px) {
+            /* A smaller blur radius is dramatically cheaper: the cost of a blur grows
+               with the square of its radius, so 34px is roughly half the work of 48px. */
+            .orb { filter: blur(34px); }
+            /* The aurora is a 2000px rotating layer — on a phone it sits almost entirely
+               behind the card and the orbs, so it is not worth its texture memory. */
+            .px-aurora { display: none; }
+            /* Three particles instead of five reads the same but costs 40% less */
+            .dust:nth-child(9), .dust:nth-child(10) { display: none; }
+        }
+
+        @media (max-width: 420px) {
+            .glass-card  { padding: 1.8rem 1.2rem 1.4rem; }
+            .telegram-icon { width: 74px; height: 74px; font-size: 2.1rem; }
+            .orb         { filter: blur(28px); }
+            /* On the narrowest screens the scan band and the halo blur go too —
+               at this size they are barely visible but still full-cost. */
+            .px-scan    { display: none; }
+            .card-halo  { filter: blur(9px); animation: none; opacity: .45; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: .01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: .01ms !important;
+            }
+        }
+    </style>
+    <style>
+        /* app-boot.js marks constrained devices before paint. Keep the login
+           card and all controls intact while freezing ambient-only effects. */
+        html[data-sbd-low-end="1"] .px-scene .orb,
+        html[data-sbd-low-end="1"] .px-scene .dust,
+        html[data-sbd-low-end="1"] .px-aurora,
+        html[data-sbd-low-end="1"] .px-grid,
+        html[data-sbd-low-end="1"] .px-scan,
+        html[data-sbd-low-end="1"] .card-halo { animation: none !important; }
+        html[data-sbd-low-end="1"] .px-scene .orb { filter: blur(24px) !important; }
+        html[data-sbd-low-end="1"] .card-halo { filter: blur(8px) !important; }
+        html[data-sbd-hidden="1"] *,
+        html[data-sbd-hidden="1"] *::before,
+        html[data-sbd-hidden="1"] *::after { animation-play-state: paused !important; }
+    </style>
+</head>
+<body>
+
+<!-- Colourful animated background scene -->
+<div class="px-scene" aria-hidden="true">
+    <span class="orb o1"></span>
+    <span class="orb o2"></span>
+    <span class="orb o3"></span>
+    <span class="orb o4"></span>
+    <span class="orb o5"></span>
+    <span class="dust"></span>
+    <span class="dust"></span>
+    <span class="dust"></span>
+    <span class="dust"></span>
+    <span class="dust"></span>
+    <div class="px-aurora"></div>
+    <div class="px-grid"></div>
+    <div class="px-scan"></div>
+</div>
+
+<div class="card-wrap">
+    <div class="card-halo" aria-hidden="true"></div>
+
+    <div class="glass-card">
+        <div class="card-inner reveal">
+
+            <span class="brand-pill"><i class="fas fa-shield-halved"></i> Secure Login</span>
+
+            <div class="telegram-icon">
+                <i class="fab fa-telegram"></i>
+            </div>
+
+            <div class="logo">SOHAG BD SHOP</div>
+
+            <p class="subtitle" id="subtitle">Step 1 of 2 — enter your Telegram ID</p>
+
+            <!-- ================== Step 1 : Telegram ID ================== -->
+            <div class="step active" id="step1">
+
+                <div class="step-box">
+                    <p><span class="step-number">1</span> Open Telegram &amp; send <strong>/start</strong> to our bot</p>
+                    <p><span class="step-number">2</span> Copy your <strong>Telegram ID</strong> &amp; paste it below</p>
+                    <p><span class="step-number">3</span> We'll send a <strong><span id="lenLabel">6</span>-digit code</strong> to your Telegram</p>
+                </div>
+
+                <a class="btn btn-telegram" id="botLink" href="https://t.me/SBSHOPNOTIFY_BOT" target="_blank" rel="noopener">
+                    <i class="fab fa-telegram"></i> Open Telegram Bot
+                </a>
+
+                <div class="code-input" id="idBox">
+                    <i class="fas fa-id-badge"></i>
+                    <input type="text" id="tgId" inputmode="numeric" autocomplete="off"
+                           spellcheck="false" placeholder="Your Telegram ID">
+                </div>
+
+                <div id="msg1" class="error-msg" aria-live="polite"></div>
+
+                <button class="btn btn-primary" id="continueBtn" type="button">
+                    <i class="fas fa-paper-plane"></i> Send Code
+                </button>
+            </div>
+
+            <!-- ================== Step 2 : One-time code ================== -->
+            <div class="step" id="step2">
+
+                <div class="sent-note" id="sentNote"></div>
+
+                <!-- JS builds the boxes, because the code can be either 6 or 8 digits -->
+                <div class="otp-row" id="otpRow"></div>
+
+                <div class="otp-meta">
+                    <span><i class="fas fa-clock"></i> Expires in <span id="ttlLeft">--:--</span></span>
+                    <button type="button" class="link-btn" id="resendBtn" disabled>Resend</button>
+                </div>
+
+                <div id="msg2" class="error-msg" aria-live="polite"></div>
+
+                <button class="btn btn-primary" id="verifyBtn" type="button">
+                    <i class="fas fa-circle-check"></i> Verify &amp; Login
+                </button>
+
+                <button type="button" class="link-btn back-link" id="backBtn">
+                    <i class="fas fa-arrow-left"></i> Use a different Telegram ID
+                </button>
+            </div>
+
+            <div class="secure-note">
+                <i class="fas fa-lock"></i> <span id="secureNote">One-time code · sent only to your Telegram</span>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    /* =====================================================================
+       Two-step login  —  step 1: Telegram ID  →  step 2: one-time code
+       ---------------------------------------------------------------------
+       ⚠️ Previously this page sent only the Telegram ID to verify_code.php, and the server
+          logged the user in just by checking "whether the ID was real". That meant the ID itself was
+          the password — anyone who learned another Telegram ID could walk straight into that
+          account (a Telegram ID is not a secret).
+
+       Now everything goes through api_user_login.php:
+          request_otp → the bot sends a fresh code to that ID
+          verify_otp  → login/signup happens only when the code matches
+       Every login needs a new code, and the code only ever reaches that Telegram
+       account — so knowing the ID alone is no longer of any use.
+       ===================================================================== */
+
+    const API = 'api_user_login.php';
+
+    // The real values come from the server (?action=config) — these are only fallbacks
+    let CFG = { length: 6, ttl: 300, resend_in: 60, bot: 'SBSHOPNOTIFY_BOT' };
+
+    let challenge   = null;   // Token for this login attempt
+    let tgIdUsed    = '';
+    let ttlTimer    = null;
+    let resendTimer = null;
+    let verifying   = false;
+
+    const $ = (id) => document.getElementById(id);
+
+    function setMsg(id, text, ok) {
+        const box = $(id);
+        if (!box) return;
+        box.textContent = text || '';
+        box.className = ok ? 'success-msg' : 'error-msg';
+    }
+
+    function busy(btn, on, idleHtml) {
+        if (!btn) return;
+        btn.disabled = on;
+        btn.innerHTML = on ? '<span class="loading-spinner"></span> Please wait…' : idleHtml;
+    }
+
+    async function api(payload) {
+        const res = await fetch(API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',        // Required for the session cookie
+            body: JSON.stringify(payload)
+        });
+        return res.json();
+    }
+
+    /* =====================================================================
+       Step 1  —  take the ID, send the code through the bot
+       ===================================================================== */
+    async function sendCode(isResend) {
+        const digits = ($('tgId').value || '').replace(/\D+/g, '');
+
+        if (!isResend) {
+            if (!digits) {
+                setMsg('msg1', 'Please enter your Telegram ID.');
+                showToast('❌ Enter your Telegram ID first', 'error');
+                shake($('idBox'));
+                return;
+            }
+            if (digits.length < 5) {
+                setMsg('msg1', "That doesn't look like a Telegram ID. Send /id to the bot to get yours.");
+                shake($('idBox'));
+                return;
+            }
+        }
+
+        const btn  = isResend ? $('resendBtn') : $('continueBtn');
+        const idle = isResend ? 'Resend' : '<i class="fas fa-paper-plane"></i> Send Code';
+        busy(btn, true, idle);
+        setMsg(isResend ? 'msg2' : 'msg1', '');
+
+        let r;
+        try {
+            r = await api({
+                action: isResend ? 'resend_otp' : 'request_otp',
+                telegram_id: digits || tgIdUsed
+            });
+        } catch (e) {
+            busy(btn, false, idle);
+            setMsg(isResend ? 'msg2' : 'msg1', 'Connection failed. Please try again.');
+            showToast('❌ Connection failed', 'error');
+            return;
+        }
+
+        busy(btn, false, idle);
+
+        if (!r.success) {
+            setMsg(isResend ? 'msg2' : 'msg1', r.message || 'Could not send the code.');
+            showToast('❌ ' + (r.message || 'Could not send the code'), 'error');
+            if (!isResend) shake($('idBox'));
+
+            // The bot still cannot message the user → make the bot button stand out
+            if (r.reason === 'not_started' || r.reason === 'not_found') {
+                const link = $('botLink');
+                if (link) { shake(link); link.style.borderColor = 'var(--c7)'; }
+            }
+            if (r.retry_after > 0) startResendTimer(r.retry_after);
+            return;
+        }
+
+        tgIdUsed   = digits || tgIdUsed;
+        challenge  = r.challenge;
+        CFG.length = r.length || CFG.length;
+
+        // r.reused = the server did not send a new code; the one sent moments ago is still
+        // valid (for example the user already fetched a code with /login in the bot). Previously in this case
+        // a "please wait 60 seconds" message appeared and the user got stuck.
+        showToast(r.reused ? '🔐 Use the code already in your Telegram' : '📨 Code sent to your Telegram', 'success');
+        goStep2(r);
+    }
+
+
+    /* =====================================================================
+       Step 2  —  code boxes, timer, verification
+       ===================================================================== */
+    function goStep2(info) {
+        $('step1').classList.remove('active');
+        $('step2').classList.add('active');
+        $('subtitle').textContent = 'Step 2 of 2 — enter the code';
+
+        const who = info.name ? ('<b>' + escHtml(info.name) + '</b>') : 'your Telegram account';
+        $('sentNote').innerHTML = info.reused
+            ? ('🔐 You already have an active <b>' + CFG.length + '-digit code</b> waiting in Telegram for ' + who +
+               ' <span class="tg-chip">' + escHtml(info.tg_masked || tgIdUsed) + '</span><br>' +
+               'Type that code below. <b>Never share this code with anyone.</b>')
+            : ('📨 A <b>' + CFG.length + '-digit code</b> was just sent to ' + who +
+               ' <span class="tg-chip">' + escHtml(info.tg_masked || tgIdUsed) + '</span><br>' +
+               'Open Telegram and type it below. <b>Never share this code with anyone.</b>');
+
+        buildCells(CFG.length);
+        startTtlTimer(info.expires_in || CFG.ttl);
+        startResendTimer(info.resend_in || CFG.resend_in);
+        setTimeout(() => { const f = document.querySelector('.otp-cell'); if (f) f.focus(); }, 280);
+    }
+
+    function backToStep1() {
+        clearInterval(ttlTimer); clearInterval(resendTimer);
+        challenge = null;
+        $('step2').classList.remove('active');
+        $('step1').classList.add('active');
+        $('subtitle').textContent = 'Step 1 of 2 — enter your Telegram ID';
+        setMsg('msg1', ''); setMsg('msg2', '');
+        $('tgId').focus();
+    }
+
+    /* ---------- Build the code boxes (6 or 8 — whatever the server says) ---------- */
+    function buildCells(n) {
+        const row = $('otpRow');
+        row.innerHTML = '';
+
+        for (let i = 0; i < n; i++) {
+            const c = document.createElement('input');
+            c.type = 'text';
+            c.inputMode = 'numeric';
+            c.autocomplete = i === 0 ? 'one-time-code' : 'off';   // Phone auto-fill
+            c.maxLength = 1;
+            c.className = 'otp-cell';
+            c.dataset.i = i;
+            row.appendChild(c);
+        }
+
+        const cells = [...row.children];
+
+        cells.forEach((cell, i) => {
+            cell.addEventListener('input', () => {
+                cell.value = cell.value.replace(/\D+/g, '').slice(-1);
+                cell.classList.toggle('filled', cell.value !== '');
+                cells.forEach(c => c.classList.remove('err'));
+                setMsg('msg2', '');
+
+                if (cell.value && i < cells.length - 1) cells[i + 1].focus();
+                // Once every box is filled, verification starts automatically
+                if (otpValue().length === cells.length) verifyCode();
+            });
+
+            cell.addEventListener('keydown', (e) => {
+                if (e.key === 'Backspace' && !cell.value && i > 0) {
+                    e.preventDefault();
+                    cells[i - 1].focus();
+                    cells[i - 1].value = '';
+                    cells[i - 1].classList.remove('filled');
+                } else if (e.key === 'ArrowLeft'  && i > 0)                { cells[i - 1].focus(); }
+                else if (e.key === 'ArrowRight' && i < cells.length - 1)   { cells[i + 1].focus(); }
+                else if (e.key === 'Enter')                                { e.preventDefault(); verifyCode(); }
+            });
+
+            // Spread a full pasted code across the boxes
+            cell.addEventListener('paste', (e) => {
+                e.preventDefault();
+                const digits = (e.clipboardData || window.clipboardData).getData('text').replace(/\D+/g, '');
+                if (!digits) return;
+                for (let k = 0; k < cells.length; k++) {
+                    cells[k].value = digits[k] || '';
+                    cells[k].classList.toggle('filled', !!digits[k]);
+                }
+                const next = cells.find(c => !c.value) || cells[cells.length - 1];
+                next.focus();
+                if (otpValue().length === cells.length) verifyCode();
+            });
+
+            cell.addEventListener('focus', () => cell.select());
+        });
+    }
+
+    function otpValue() {
+        return [...document.querySelectorAll('.otp-cell')].map(c => c.value).join('');
+    }
+
+    function clearCells(markError) {
+        document.querySelectorAll('.otp-cell').forEach(c => {
+            c.value = '';
+            c.classList.remove('filled');
+            if (markError) c.classList.add('err');
+        });
+        const f = document.querySelector('.otp-cell');
+        if (f) f.focus();
+    }
+
+    /* ---------- Code expiry countdown ---------- */
+    function startTtlTimer(secs) {
+        clearInterval(ttlTimer);
+        let left = Math.max(0, parseInt(secs, 10) || 0);
+
+        const tick = () => {
+            const m = String(Math.floor(left / 60)).padStart(2, '0');
+            const s = String(left % 60).padStart(2, '0');
+            const el = $('ttlLeft');
+            el.textContent = m + ':' + s;
+            el.classList.toggle('low', left <= 60);
+
+            if (left <= 0) {
+                clearInterval(ttlTimer);
+                el.textContent = 'expired';
+                challenge = null;
+                setMsg('msg2', 'The code expired. Tap Resend to get a new one.');
+                clearCells(false);
+                startResendTimer(0);
+            }
+            left--;
+        };
+        tick();
+        ttlTimer = setInterval(tick, 1000);
+    }
+
+    /* ---------- Cooldown before requesting another code ---------- */
+    function startResendTimer(secs) {
+        clearInterval(resendTimer);
+        const btn = $('resendBtn');
+        let left = Math.max(0, parseInt(secs, 10) || 0);
+
+        const tick = () => {
+            if (left <= 0) {
+                clearInterval(resendTimer);
+                btn.disabled = false;
+                btn.textContent = 'Resend code';
+                return;
+            }
+            btn.disabled = true;
+            btn.textContent = 'Resend in ' + left + 's';
+            left--;
+        };
+        tick();
+        if (left > 0) resendTimer = setInterval(tick, 1000);
+    }
+
+    /* ---------- Code verification ---------- */
+    async function verifyCode() {
+        if (verifying) return;
+
+        const code = otpValue();
+        const btn  = $('verifyBtn');
+        const idle = '<i class="fas fa-circle-check"></i> Verify &amp; Login';
+
+        if (!challenge) {
+            setMsg('msg2', 'This code is no longer valid. Tap Resend for a new one.');
+            return;
+        }
+        if (code.length !== CFG.length) {
+            setMsg('msg2', 'Please enter all ' + CFG.length + ' digits.');
+            shake($('otpRow'));
+            return;
+        }
+
+        verifying = true;
+        busy(btn, true, idle);
+        setMsg('msg2', '');
+
+        let r;
+        try {
+            r = await api({ action: 'verify_otp', challenge: challenge, code: code });
+        } catch (e) {
+            verifying = false;
+            busy(btn, false, idle);
+            setMsg('msg2', 'Connection failed. Please try again.');
+            showToast('❌ Connection failed', 'error');
+            return;
+        }
+
+        if (r.success) {
+            busy(btn, true, idle);
+            btn.innerHTML = '<i class="fas fa-check"></i> Verified';
+            clearInterval(ttlTimer); clearInterval(resendTimer);
+            showToast('✅ Verified! Logging you in…', 'success');
+            finishLogin(r.user);
+            return;                       // verifying = true is kept in place so a double submit cannot happen
+        }
+
+        verifying = false;
+        busy(btn, false, idle);
+        setMsg('msg2', r.message || 'Verification failed.');
+        showToast('❌ ' + (r.message || 'Wrong code'), 'error');
+        shake($('otpRow'));
+
+        // The code itself has expired → let the user request a new one
+        if (['expired', 'no_session', 'used', 'too_many'].includes(r.reason)) {
+            challenge = null;
+            clearInterval(ttlTimer);
+            $('ttlLeft').textContent = 'expired';
+            startResendTimer(0);
+            clearCells(false);
+        } else {
+            clearCells(true);
+        }
+    }
+
+    /* =====================================================================
+       Finishing the login  —  the localStorage keys that every other page reads
+       are set exactly as before (so nothing breaks).
+       A signed session cookie has already been set on the server as well.
+       ===================================================================== */
+    function finishLogin(userData) {
+        // ✅ The write is read back to confirm it really landed. Because index.html /
+        //    account.html and the rest send the user back to login.html when this flag
+        //    is missing — with storage blocked (private mode / storage full) that
+        //    caused a login ↔ home loop and the user saw a blank screen.
+        let stored = false;
+        try {
+            let users = JSON.parse(localStorage.getItem('systemUsers')) || [];
+            let existing = users.find(u => u.telegramId == userData.chat_id);
+
+            if (!existing) {
+                existing = {
+                    id: userData.account_id || Date.now(),
+                    telegramId: userData.chat_id,
+                    telegramUsername: userData.username || ('user_' + userData.chat_id),
+                    firstName: userData.first_name,
+                    lastName: userData.last_name,
+                    fullName: userData.full_name || userData.first_name || ('User_' + userData.chat_id),
+                    username: 'tg_' + String(userData.username || userData.chat_id).slice(-8),
+                    joinDate: new Date().toISOString(),
+                    status: userData.status || 'active',
+                    provider: 'telegram'
+                };
+                users.push(existing);
+            } else {
+                // Update when the name/username changes
+                existing.fullName         = userData.full_name || existing.fullName;
+                existing.telegramUsername = userData.username  || existing.telegramUsername;
+            }
+            localStorage.setItem('systemUsers', JSON.stringify(users));
+
+            localStorage.setItem('isLoggedIn', 'true');
+            localStorage.setItem('userSessionName', existing.fullName);
+            localStorage.setItem('userTelegramId', userData.chat_id);
+            localStorage.setItem('userTelegramUsername', userData.username || '');
+
+            // Read back to verify — calling setItem() alone does not mean it was stored
+            stored = (localStorage.getItem('isLoggedIn') === 'true'
+                   && localStorage.getItem('userTelegramId') == userData.chat_id);
+        } catch (e) { stored = false; }
+
+        if (!stored) {
+            setMsg('msg2', 'Your browser is blocking site storage. Please turn off Private/Incognito mode (or allow cookies & storage for this site) and verify again.');
+            showToast('⚠️ Browser storage blocked', 'error');
+            verifying = false;
+            return;                       // Redirecting would loop — so stop right here
+        }
+
+        // 🚀 Previously it waited 1200ms. ✅ A short delay is kept so the Verified
+        //    label stays visible, but it has been cut down by half.
+        setTimeout(() => { window.location.replace('index.html'); }, 600);
+    }
+
+    /* =====================================================================
+       Small utilities
+       ===================================================================== */
+    function escHtml(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[m]));
+    }
+
+    function shake(el) {
+        if (!el || !el.animate) return;
+        el.animate([
+            { transform: 'translateX(0)' },
+            { transform: 'translateX(-9px)' },
+            { transform: 'translateX(8px)' },
+            { transform: 'translateX(-5px)' },
+            { transform: 'translateX(0)' }
+        ], { duration: 380, easing: 'ease-in-out' });
+    }
+
+    function showToast(message, type) {
+        const toast = document.createElement('div');
+        toast.className = 'toast toast-' + type;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2600);
+    }
+
+    /* =====================================================================
+       Wiring  +  page boot
+       ===================================================================== */
+    $('continueBtn').addEventListener('click', () => sendCode(false));
+    $('resendBtn').addEventListener('click',  () => sendCode(true));
+    $('backBtn').addEventListener('click',    backToStep1);
+    $('verifyBtn').addEventListener('click',  verifyCode);
+
+    (function () {
+        const box   = $('idBox');
+        const input = $('tgId');
+        input.addEventListener('focus', () => box.classList.add('focused'));
+        input.addEventListener('blur',  () => box.classList.remove('focused'));
+        input.addEventListener('input', () => {
+            // Keep digits only — a paste containing backticks or spaces still gets cleaned up
+            input.value = input.value.replace(/\D+/g, '');
+            box.classList.toggle('filled', input.value.length > 0);
+            setMsg('msg1', '');
+        });
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); sendCode(false); }
+        });
+    })();
+
+    /* ---------------------------------------------------------------------
+       Session check.
+       ⚠️ Previously this checked only  localStorage.isLoggedIn === 'true'  before
+          redirecting to index.html. But anyone can hand-write localStorage
+          values from DevTools — so that alone is no longer enough.
+          Now the server is asked whether a real session exists.
+       --------------------------------------------------------------------- */
+    (async function boot() {
+        // UI values come from the server (code length 6 or 8 digits, bot name, etc.)
+        try {
+            const c = await (await fetch(API + '?action=config', { credentials: 'same-origin' })).json();
+            if (c && c.success) {
+                CFG = { length: c.length, ttl: c.ttl, resend_in: c.resend_in, bot: c.bot };
+                $('lenLabel').textContent = c.length;
+                $('botLink').href = c.bot_url;
+            }
+        } catch (e) { /* If the config does not arrive, the fallback values will do */ }
+
+        /* ⚠️ Previously the very first line here was:
+                if (localStorage.getItem('isLoggedIn') !== 'true') return;
+           So the server was never even asked when the local flag was missing. But the
+           login lives in a signed 30-day cookie on the SERVER — localStorage is only a
+           copy of it. Browser storage cleanup, private mode, a full disk, or another page
+           clearing the flag would throw away a session that was perfectly alive, and the
+           user had to fetch a new code from the bot for no reason.
+
+           ✅ Now the server is always asked. If a session is there, the localStorage keys
+              are written back from the server's own answer and the user goes straight in —
+              no code, no waiting. This is what keeps the login alive for the full 30 days. */
+        let s = null;
+        for (let attempt = 0; attempt < 2; attempt++) {
+            if (attempt > 0) await new Promise(r => setTimeout(r, 900));
+            try {
+                s = await (await fetch(API + '?action=session', { credentials: 'same-origin' })).json();
+            } catch (e) { s = null; continue; }        // server unreachable — try once more
+            if (s && s.logged_in) break;
+        }
+
+        if (s && s.logged_in) {
+            // Rebuild the keys the other pages read, straight from the server's answer
+            let stored = false;
+            try {
+                const acc = s.account || {};
+                const tg  = String(s.telegram_id || '');
+                localStorage.setItem('isLoggedIn', 'true');
+                localStorage.setItem('userTelegramId', tg);
+                if (acc.full_name)         localStorage.setItem('userSessionName', acc.full_name);
+                if (acc.telegram_username) localStorage.setItem('userTelegramUsername', acc.telegram_username);
+
+                /* ⚠️ Read BOTH back. index.html, shop.html, orders.html, deposit.html,
+                      pending.html and account.html all read userTelegramId — with only
+                      isLoggedIn written they would load but show nothing. And if storage
+                      is blocked or full, sending the user to index.html would bounce them
+                      straight back here, over and over. Both checks together stop that. */
+                stored = (localStorage.getItem('isLoggedIn') === 'true'
+                       && localStorage.getItem('userTelegramId') === tg
+                       && tg !== '');
+            } catch (e) { stored = false; }
+
+            if (!stored) {
+                setMsg('msg1', 'Your browser is blocking site storage. Please turn off Private/Incognito mode (or allow cookies & storage for this site).');
+                return;
+            }
+            window.location.replace('index.html');
+            return;
+        }
+
+        /* Only now is it certain there is no session on the server, so the stale local
+           flags are cleared.
+           ⚠️ Note the strict  === false  test. If the server sent back anything else
+              (an error object, a rate-limit reply, a half-broken response) then
+              logged_in is simply  undefined  — that is "don't know", NOT a logout, so
+              nothing is deleted. Same when  s  is null because the server could not be
+              reached. In both cases the login form is just shown as usual. */
+        try {
+            if (s && s.logged_in === false && localStorage.getItem('isLoggedIn') === 'true') {
+                ['isLoggedIn', 'userSessionName', 'userTelegramId', 'userTelegramUsername']
+                    .forEach(k => localStorage.removeItem(k));
+                setMsg('msg1', 'Your session ended. Please verify with a new code.');
+            }
+        } catch (e) { /* storage blocked — there is nothing to clear anyway */ }
+    })();
+</script>
+</body>
+</html>

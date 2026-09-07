@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>My Orders - SOHAG BD SHOP</title>
+    <!-- Favicon / App icons -->
+    <link rel="icon" href="/favicon.ico?v=2" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=2">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=2">
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png?v=2">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=2">
+    <link rel="manifest" href="/site.webmanifest?v=2">
+    <meta name="theme-color" content="#0f111a">
+    <!-- ⚡ Font Awesome নন-ব্লকিং: cdnjs ধীর বা ব্লকড হলেও পেজ সাথে সাথে আঁকা হবে।
+         (আগে এই একটা লাইনই "লগইনের পর ফাঁকা স্ক্রিন, রিলোড দিলে ঠিক" সমস্যার মূল কারণ ছিল) -->
+    <!-- ⚡ media="print" বাদ দেওয়া হয়েছে: ওটা পেজ ব্লক করে না, কিন্তু ব্রাউজার প্রিন্ট
+         স্টাইলশিটকে সবচেয়ে *কম* ডাউনলোড প্রায়োরিটি দেয় — তাই আইকনগুলো সবার শেষে আসত
+         আর দেরিতে পপ করত। preload + onload swap: ব্লক করে না, আবার হাই প্রায়োরিটিও। -->
+    <link rel="preload" as="style" href="fa-subset.css?v=3"
+          onload="this.rel='stylesheet'; this.onload=null;">
+    <!-- আইকন ফন্টটাও CSS-এর সাথে সমান্তরালে আসবে, CSS আসার পরে নয় -->
+    <link rel="preload" as="font" type="font/woff2" crossorigin
+          href="fa-solid-900.woff2">
+    <noscript><link rel="stylesheet" href="fa-subset.css?v=3"></noscript>
+    <!-- 🚀 পেজ চালু করার শেয়ার্ড হেল্পার — কেন দরকার, বিস্তারিত app-boot.js-এ লেখা আছে -->
+    <script src="app-boot.js?v=4"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0f111a; color: #e2e8f0; min-height: 100vh; padding-bottom: 110px; }
+        
+        /* HEADER CSS */
+        .header { background: rgba(23, 17, 36, 0.85); backdrop-filter: blur(12px); padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid rgba(0, 242, 254, 0.3); position: sticky; top: 0; z-index: 1000; }
+        .header-left { display: flex; align-items: center; gap: 15px; }
+        .header h1 { font-size: 24px; font-weight: 900; background: linear-gradient(90deg, #00f2fe, #4facfe); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 0; }
+        .header-actions { display: flex; align-items: center; gap: 12px; }
+        /* Header balance pill — occupies the slot the language switcher used to hold.
+           The full styling, including the responsive rules, lives in user-theme.css. */
+        .header-balance { display: inline-flex; align-items: center; gap: 9px; padding: 6px 13px 6px 11px; border-radius: 14px; border: 1px solid rgba(0,242,254,0.32); background: rgba(6,8,16,0.55); white-space: nowrap; }
+        .hb-icon { font-size: 14px; line-height: 1; color: #00f2fe; }
+        .hb-text { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+        .hb-label { font-size: 8.5px; font-weight: 800; letter-spacing: 1px; line-height: 1; text-transform: uppercase; color: #8ea1bb; }
+        .header-wallet { font-family: 'Consolas', 'SF Mono', monospace; font-size: 14.5px; font-weight: 800; line-height: 1; color: #7ef9d0; }
+        .header-icon { cursor: pointer; font-size: 20px; color: #00f2fe; padding: 5px; transition: 0.3s; }
+        .header-icon:hover { color: #ff0844; }
+
+        .container { padding: 20px; max-width: 800px; margin: 0 auto; }
+        .warning-box { background: rgba(255, 177, 153, 0.1); border: 1px dashed #ffb199; color: #ffb199; padding: 12px; border-radius: 12px; font-size: 13px; text-align: center; font-weight: bold; margin-bottom: 25px; }
+
+        .order-card { background: #171c28; border: 1px solid #1e2532; border-radius: 16px; margin-bottom: 15px; padding: 20px; transition: 0.3s; }
+        .order-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px dashed rgba(255,255,255,0.1); padding-bottom: 15px; margin-bottom: 15px; }
+        .order-title { font-size: 16px; font-weight: bold; color: #fff; }
+        .order-id { font-size: 12px; color: #94a3b8; font-family: monospace; margin-top: 4px; }
+        .status-badge { padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+        .status-Pending { background: rgba(241, 196, 15, 0.1); color: #f1c40f; border: 1px solid #f1c40f; }
+        .status-Completed { background: rgba(46, 204, 113, 0.1); color: #2ecc71; border: 1px solid #2ecc71; }
+        .status-Rejected { background: rgba(231, 76, 60, 0.1); color: #e74c3c; border: 1px solid #e74c3c; }
+
+        .delivery-block { background: #0a0c10; border: 1px solid #1e2532; border-radius: 10px; padding: 15px; margin-top: 15px; }
+        .delivery-label { font-size: 11px; color: #2ecc71; font-weight: bold; margin-bottom: 10px; border-bottom: 1px dashed #1e2532; padding-bottom: 5px; }
+        
+        .download-link { display: inline-block; background: #2ecc71; color: #000; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; margin: 5px 0; transition: 0.3s; }
+        .download-link:hover { background: #00f2fe; color: #000; }
+        .key-item { background: #000; padding: 10px; border-radius: 6px; margin: 5px 0; border: 1px solid #00f2fe; color: #00f2fe; font-family: monospace; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .key-item code { word-break: break-all; }
+        .copy-btn { background: #00f2fe; color: #000; border: none; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px; }
+        .copy-btn:hover { background: #2ecc71; }
+        .copy-all-btn { background: #f39c12; color: #000; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; margin-bottom: 10px; width: 100%; }
+        .copy-all-btn:hover { background: #e67e22; }
+        .delivery-content { word-break: break-word; }
+        
+        /* BOTTOM NAV & MODAL CSS */
+        .bottom-nav { position: fixed; bottom: 15px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 600px; background: rgba(15,15,20,0.9); backdrop-filter: blur(12px); border: 1px solid rgba(0,242,254,0.3); border-radius: 22px; padding: 12px; display: flex; justify-content: space-around; align-items: center; z-index: 1000; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; color: #94a3b8; font-size: 11px; font-weight: bold; cursor: pointer; text-decoration: none; transition: 0.3s; }
+        .nav-item i { font-size: 20px; margin-bottom: 5px; }
+        .nav-item.active, .nav-item:hover { color: #00f2fe; }
+
+        .support-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); backdrop-filter: blur(6px); z-index: 2000; display: none; justify-content: center; align-items: center; }
+        .support-box { background: linear-gradient(145deg, #0f0f17, #0a0a10); padding: 30px 25px; border-radius: 28px; width: 90%; max-width: 340px; text-align: center; border: 1px solid rgba(0, 242, 254, 0.4); position: relative; }
+        .close-modal { position: absolute; top: 15px; right: 20px; color: #ff0844; font-size: 22px; cursor: pointer; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(255, 8, 68, 0.1); }
+        .close-modal:hover { background: #ff0844; color: #fff; transform: rotate(90deg); }
+        .support-box h3 { color: #fff; margin-bottom: 8px; font-size: 22px; }
+        .support-box h3 i { color: #00f2fe; margin-right: 8px; }
+        .support-desc { color: #94a3b8; font-size: 13px; margin-bottom: 25px; }
+        .support-btn { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 14px; border-radius: 14px; font-weight: 700; font-size: 16px; margin-top: 12px; text-decoration: none; transition: 0.3s; }
+        .btn-wa { background: rgba(37, 211, 102, 0.12); border: 1px solid #25D366; color: #25D366; }
+        .btn-wa:hover { background: #25D366; color: #fff; }
+        .btn-tg { background: rgba(0, 136, 204, 0.12); border: 1px solid #0088cc; color: #0088cc; }
+        .btn-tg:hover { background: #0088cc; color: #fff; }
+    </style>
+
+    <!-- Animated theme (background colour animation + card animations) -->
+    <link rel="preload" as="style" href="user-theme.css?v=6">
+    <link rel="stylesheet" href="user-theme.css?v=6">
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <h1 id="brandName">𝗦𝗢𝗛𝗔𝗚 𝗕𝗗 𝗦𝗛𝗢𝗣</h1>
+        </div>
+        <div class="header-actions">
+            <div class="header-balance" title="Wallet balance">
+                <i class="fa-solid fa-wallet hb-icon"></i>
+                <span class="hb-text">
+                    <span class="hb-label">Balance</span>
+                    <span class="header-wallet" id="walletDisplay">$0.00</span>
+                </span>
+            </div>
+            <div class="header-icon" onclick="window.location.href='account.html'">
+                <i class="fa-solid fa-user-astronaut"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2 style="color: #00f2fe; margin-bottom: 20px; font-size: 18px; border-bottom: 1px dashed rgba(255,255,255,0.1); padding-bottom: 10px;"><i class="fa-solid fa-box-open"></i> My Orders</h2>
+        <div class="warning-box">Notice: Items are auto-deleted in 7 days for security.</div>
+        <div id="ordersList" class="px-stagger"></div>
+    </div>
+
+    <div class="bottom-nav">
+        <a href="index.html" class="nav-item"><i class="fa-solid fa-store"></i><span id="n-buy">Shop</span></a>
+        <a href="deposit.html" class="nav-item"><i class="fa-solid fa-wallet"></i><span id="n-dep">Deposit</span></a>
+        <a href="pending.html" class="nav-item"><i class="fa-solid fa-clock-rotate-left"></i><span id="n-pen">Pending</span></a>
+        <a href="orders.html" class="nav-item active"><i class="fa-solid fa-box-open"></i><span id="n-ord">Orders</span></a>
+        <a href="#" class="nav-item" id="navSupport" onclick="openSupportModal(event)"><i class="fa-solid fa-headset"></i><span id="n-sup">Support</span></a>
+    </div>
+
+    <!-- Support Modal -->
+    <div class="support-overlay" id="supportModal">
+        <div class="support-box">
+            <div class="close-modal" onclick="closeSupportModal()"><i class="fa-solid fa-times"></i></div>
+            <h3><i class="fa-solid fa-headset"></i> Live Support</h3>
+            <div class="support-desc">Choose a platform to contact us.</div>
+            <a href="https://wa.me/8801618202470" target="_blank" class="support-btn btn-wa"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>
+            <a href="https://t.me/SH_5617" target="_blank" class="support-btn btn-tg"><i class="fa-brands fa-telegram"></i> Telegram</a>
+        </div>
+    </div>
+
+    <script>
+        // Header & Nav JS
+        function openSupportModal(e) { if(e) e.preventDefault(); document.getElementById('supportModal').style.display = 'flex'; }
+        function closeSupportModal() { document.getElementById('supportModal').style.display = 'none'; }
+        window.onclick = function(event) { if (event.target === document.getElementById('supportModal')) closeSupportModal(); }
+        
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadLiveBalance();
+            // ব্যালেন্স আপডেট: প্রতি ১৫ সেকেন্ডে, ট্যাব দেখা না গেলে বন্ধ
+            if (window.SBD && SBD.poll) SBD.poll(loadLiveBalance, 15000);
+            else setInterval(function() { if (!document.hidden) loadLiveBalance(); }, 15000);
+        });
+
+        async function loadLiveBalance() {
+            let tgId = localStorage.getItem('userTelegramId');
+            if(!tgId) return;
+            const cacheKey = 'balance:' + tgId;
+            const paint = (value) => {
+                const el = document.getElementById('walletDisplay');
+                if (el) el.innerHTML = '$' + parseFloat(value || 0).toFixed(2);
+            };
+            if (window.SBD && SBD.cacheGet) {
+                const cached = SBD.cacheGet(cacheKey, true);
+                if (cached && cached.success) paint(cached.balance);
+            }
+            try {
+                let res = await fetch(`api_balance.php?telegram_id=${tgId}`);
+                let data = await res.json();
+                if(data.success) {
+                    paint(data.balance);
+                    if (window.SBD && SBD.cacheSet) SBD.cacheSet(cacheKey, data, 5 * 60 * 1000);
+                }
+            } catch(e) {}
+        }
+
+        // ========== ফিক্সড ফরম্যাট ডেলিভারি টেক্সট ফাংশন ==========
+        function formatDeliveryText(text) {
+            if(!text) return '';
+            let htmlOutput = '';
+            let allKeys = [];
+            
+            let lines = text.split('\n');
+            lines.forEach(line => {
+                line = line.trim();
+                if(line === '') return;
+                
+                // 1. Firebase/BRDX কী চেক করুন
+                let keyMatches = line.match(/BRDX-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}/gi);
+                if(keyMatches && keyMatches.length) {
+                    keyMatches.forEach(key => {
+                        allKeys.push(key);
+                        htmlOutput += `<div class="key-item"><code>${escapeHtml(key)}</code><button class="copy-btn" onclick="copyToClipboard('${escapeHtml(key)}')"><i class="fa-regular fa-copy"></i> Copy</button></div>`;
+                    });
+                    return;
+                }
+                
+                // 2. ডাউনলোড লিংক চেক করুন (http://, https://, বা /uploads/ দিয়ে শুরু)
+                let urlMatch = line.match(/(https?:\/\/[^\s]+|\/uploads\/[^\s]+)/i);
+                if(urlMatch && urlMatch[0]) {
+                    let url = urlMatch[0].trim();
+                    // রিলেটিভ URL কে absolute তে রূপান্তর করুন
+                    if(url.startsWith('/uploads/')) {
+                        url = window.location.origin + url;
+                    }
+                    let fileName = url.split('/').pop();
+                    htmlOutput += `<a href="${url}" download class="download-link" target="_blank"><i class="fa-solid fa-download"></i> Download ${escapeHtml(fileName)}</a><br>`;
+                    return;
+                }
+                
+                // 3. "Download File:" বা "Attached File:" লাইন চেক করুন
+                if(line.toLowerCase().includes('download file') || line.toLowerCase().includes('attached file')) {
+                    // লাইনের মধ্যে URL খুঁজুন
+                    let innerUrlMatch = line.match(/(https?:\/\/[^\s]+|\/uploads\/[^\s]+)/i);
+                    if(innerUrlMatch && innerUrlMatch[0]) {
+                        let url = innerUrlMatch[0].trim();
+                        if(url.startsWith('/uploads/')) {
+                            url = window.location.origin + url;
+                        }
+                        let fileName = url.split('/').pop();
+                        htmlOutput += `<a href="${url}" download class="download-link" target="_blank"><i class="fa-solid fa-download"></i> Download ${escapeHtml(fileName)}</a><br>`;
+                    } else {
+                        htmlOutput += `<div style="margin-bottom: 5px; color: #cbd5e1;">${escapeHtml(line)}</div>`;
+                    }
+                    return;
+                }
+                
+                // 4. সাধারণ টেক্সট লাইন
+                htmlOutput += `<div style="margin-bottom: 5px; color: #cbd5e1;">${escapeHtml(line)}</div>`;
+            });
+
+            // একাধিক কী থাকলে কপি অল বাটন দেখান
+            if(allKeys.length > 1) {
+                let allKeysStr = allKeys.join('\n').replace(/'/g, "\\'");
+                htmlOutput = `<button class="copy-all-btn" onclick="copyAllKeys('${allKeysStr}')"><i class="fa-regular fa-copy"></i> Copy All Keys (${allKeys.length})</button>` + htmlOutput;
+            }
+            
+            return htmlOutput;
+        }
+
+        function escapeHtml(str) {
+            if(!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if(m === '&') return '&amp;';
+                if(m === '<') return '&lt;';
+                if(m === '>') return '&gt;';
+                return m;
+            });
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert("✅ Key copied to clipboard!");
+            }).catch(() => {
+                alert("❌ Failed to copy!");
+            });
+        }
+
+        function copyAllKeys(keys) {
+            navigator.clipboard.writeText(keys).then(() => {
+                alert("✅ All keys copied!");
+            }).catch(() => {
+                alert("❌ Failed to copy!");
+            });
+        }
+
+        async function loadOrders() {
+            let tgId = localStorage.getItem('userTelegramId');
+            if(!tgId) { 
+                document.getElementById('ordersList').innerHTML = '<div style="text-align:center; padding:40px;">Please login first!</div>'; 
+                return; 
+            }
+
+            const cacheKey = 'orders:' + tgId;
+            const renderOrders = (data) => {
+                if(!data || !data.success || !data.orders || !data.orders.length) {
+                    document.getElementById('ordersList').innerHTML = '<div style="text-align:center; padding:40px; color:#64748b;">No orders found.</div>';
+                    return;
+                }
+
+                let html = '';
+                [...data.orders].reverse().forEach(o => {
+                    let delivery = '';
+                    if(o.status === 'Completed' && o.delivery_data) {
+                        delivery = `<div class="delivery-block"><div class="delivery-label"><i class="fa-solid fa-gift"></i> Delivery Content</div><div class="delivery-content">${formatDeliveryText(o.delivery_data)}</div></div>`;
+                    }
+                    let quantityHtml = o.quantity ? `<div class="order-id">Quantity: ${o.quantity}</div>` : '';
+                    html += `<div class="order-card"><div class="order-header"><div><div class="order-title">${escapeHtml(o.title)}</div><div class="order-id">#${escapeHtml(o.order_id)} | ${new Date(o.date).toLocaleString()}</div>${quantityHtml}</div><div class="status-badge status-${o.status}">${o.status}</div></div><div style="font-size:13px; color:#cbd5e1;">${escapeHtml(o.details)} - <b>$${parseFloat(o.price).toFixed(2)}</b></div>${delivery}</div>`;
+                });
+                document.getElementById('ordersList').innerHTML = html;
+            };
+            if (window.SBD && SBD.cacheGet) {
+                const cached = SBD.cacheGet(cacheKey, true);
+                if (cached) renderOrders(cached);
+            }
+
+            try {
+                let res = await fetch(`api_orders.php?action=user_list&telegram_id=${tgId}`);
+                let data = await res.json();
+                
+                if(!data.success || !data.orders.length) {
+                    document.getElementById('ordersList').innerHTML = '<div style="text-align:center; padding:40px; color:#64748b;">No orders found.</div>';
+                    return;
+                }
+                
+                let html = '';
+                // রিভার্স করুন (নিচেরটা আগে দেখান)
+                [...data.orders].reverse().forEach(o => {
+                    let delivery = '';
+                    if(o.status === 'Completed' && o.delivery_data) {
+                        delivery = `
+                            <div class="delivery-block">
+                                <div class="delivery-label"><i class="fa-solid fa-gift"></i> Delivery Content</div>
+                                <div class="delivery-content">${formatDeliveryText(o.delivery_data)}</div>
+                            </div>
+                        `;
+                    }
+                    
+                    let quantityHtml = o.quantity ? `<div class="order-id">Quantity: ${o.quantity}</div>` : '';
+                    
+                    html += `
+                        <div class="order-card">
+                            <div class="order-header">
+                                <div>
+                                    <div class="order-title">${escapeHtml(o.title)}</div>
+                                    <div class="order-id">#${escapeHtml(o.order_id)} | ${new Date(o.date).toLocaleString()}</div>
+                                    ${quantityHtml}
+                                </div>
+                                <div class="status-badge status-${o.status}">${o.status}</div>
+                            </div>
+                            <div style="font-size:13px; color:#cbd5e1;">${escapeHtml(o.details)} - <b>$${parseFloat(o.price).toFixed(2)}</b></div>
+                            ${delivery}
+                        </div>
+                    `;
+                });
+                document.getElementById('ordersList').innerHTML = html;
+                if (window.SBD && SBD.cacheSet) SBD.cacheSet(cacheKey, data, 5 * 60 * 1000);
+            } catch(e) {
+                console.error('Error loading orders:', e);
+                if (!(window.SBD && SBD.cacheGet && SBD.cacheGet(cacheKey, true))) {
+                    document.getElementById('ordersList').innerHTML = '<div style="text-align:center; padding:40px; color:#e74c3c;">Error loading orders. Please try again.</div>';
+                }
+            }
+        }
+
+        // ⚡ আগে এখানে  window.onload = loadOrders;  ছিল — বাইরের CDN ফাইল
+        //    আসা পর্যন্ত অর্ডার লোড হতো না, তাই পেজ ফাঁকা দেখাত।
+        //    (বিস্তারিত app-boot.js-এ)
+        if (window.SBD) { SBD.ready(loadOrders, { onEveryShow: true }); }
+        else { document.addEventListener('DOMContentLoaded', loadOrders); }
+    </script>
+</body>
+</html>

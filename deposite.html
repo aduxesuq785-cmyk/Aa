@@ -1,0 +1,2010 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Deposit Funds - SOHAG BD SHOP</title>
+    <!-- Favicon / App icons -->
+    <link rel="icon" href="/favicon.ico?v=2" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=2">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=2">
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png?v=2">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=2">
+    <link rel="manifest" href="/site.webmanifest?v=2">
+    <meta name="theme-color" content="#0f111a">
+    <!-- ⚡ Font Awesome non-blocking: even if cdnjs is slow or blocked, the page is drawn immediately.
+         (previously this one line was the root cause of the "blank screen after login, fine after a reload" problem) -->
+    <!-- ⚡ media="print" dropped: it does keep the page from blocking, but the browser also
+         gives a print stylesheet the *lowest* download priority, so the icons arrived last
+         of all and popped in late. preload + onload swap is non-blocking AND high priority. -->
+    <link rel="preload" as="style" href="fa-subset.css?v=3"
+          onload="this.rel='stylesheet'; this.onload=null;">
+    <!-- The icon font itself, fetched in parallel with the CSS instead of after it -->
+    <link rel="preload" as="font" type="font/woff2" crossorigin
+          href="fa-solid-900.woff2">
+    <noscript><link rel="stylesheet" href="fa-subset.css?v=3"></noscript>
+    <!-- 🚀 Shared page boot helper — why it is needed is documented in detail in app-boot.js -->
+    <script src="app-boot.js?v=4"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #090910 0%, #171124 50%, #0d1321 100%); color: #e2e8f0; min-height: 100vh; padding-bottom: 110px; }
+        
+        .header { background: rgba(23, 17, 36, 0.85); backdrop-filter: blur(12px); padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid rgba(0, 242, 254, 0.3); position: sticky; top: 0; z-index: 1000; }
+        .header-left { display: flex; align-items: center; gap: 15px; }
+        .header h1 { font-size: 24px; font-weight: 900; background: linear-gradient(90deg, #00f2fe, #4facfe); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .header-actions { display: flex; align-items: center; gap: 12px; }
+        /* Header balance pill — occupies the slot the language switcher used to hold.
+           The full styling, including the responsive rules, lives in user-theme.css. */
+        .header-balance { display: inline-flex; align-items: center; gap: 9px; padding: 6px 13px 6px 11px; border-radius: 14px; border: 1px solid rgba(0,242,254,0.32); background: rgba(6,8,16,0.55); white-space: nowrap; }
+        .hb-icon { font-size: 14px; line-height: 1; color: #00f2fe; }
+        .hb-text { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+        .hb-label { font-size: 8.5px; font-weight: 800; letter-spacing: 1px; line-height: 1; text-transform: uppercase; color: #8ea1bb; }
+        .header-wallet { font-family: 'Consolas', 'SF Mono', monospace; font-size: 14.5px; font-weight: 800; line-height: 1; color: #7ef9d0; }
+        .header-icon { cursor: pointer; font-size: 20px; color: #00f2fe; padding: 5px; transition: 0.3s; }
+        .header-icon:hover { color: #ff0844; }
+
+        /* ==================================================================
+           📐 Deposit page layout — clean on mobile / tablet / PC alike
+           ------------------------------------------------------------------
+           Previously .pay-grid was a fixed 2-column grid on every screen and each logo sat
+           at a different size based on its own aspect ratio (bkash.png wide, nagad.png square) —
+           as a result the cards looked untidy on small phones, the name lines did not fit
+           on a single row, and on large screens a lot of empty space was left on the right.
+           Now: an auto-fit grid + a round plate of the same size for every logo.
+           ================================================================== */
+        .container { width: 100%; max-width: 1100px; margin: 0 auto; padding: 20px 16px 10px; }
+        .title { color: #fff; font-size: clamp(17px, 4.6vw, 22px); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #00f2fe; padding-bottom: 6px; margin-bottom: 10px; display: inline-block; }
+        /* Subtitle — previously an inline negative margin was applied, so on small phones it
+           stuck to the title. It is now moved into a class and the spacing is fixed. */
+        .page-sub { color: #94a3b8; font-size: clamp(12.5px, 3.4vw, 14px); line-height: 1.6; margin: 0 0 22px; max-width: 620px; }
+
+        .pay-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+            margin-top: 12px;
+            align-items: stretch;
+        }
+        .pay-card {
+            display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+            gap: 10px; min-width: 0; height: 100%;
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(0,242,254,0.25);
+            border-radius: 18px; padding: 18px 12px 16px; text-align: center;
+            cursor: pointer; transition: 0.3s; -webkit-tap-highlight-color: transparent;
+        }
+        .pay-card:hover { border-color: #00f2fe; background: rgba(0,242,254,0.1); transform: translateY(-3px); }
+        /* Round logo plate — every gateway logo sits at exactly the same size, so the
+           name lines below stay at the same height on every card */
+        .pay-card img, .pay-logo {
+            width: 60px; height: 60px; flex-shrink: 0; display: block; margin: 0;
+            border-radius: 50%; object-fit: cover; background: #fff;
+            box-shadow: 0 0 0 1px rgba(0,242,254,0.35), 0 6px 16px rgba(0,0,0,0.45);
+        }
+        .pay-card h4 { margin: 0; color: #fff; font-size: 14.5px; font-weight: 800; line-height: 1.3; word-break: break-word; }
+        .pay-card .pay-sub { display: block; color: #5eead4; font-size: 10.5px; font-weight: 600; margin-top: 4px; letter-spacing: 0.2px; }
+
+        .btn { width: 100%; padding: 14px; background: rgba(0,242,254,0.1); border: 1px solid #00f2fe; color: #00f2fe; font-weight: bold; border-radius: 10px; cursor: pointer; margin-top: 15px; text-transform: uppercase; transition: 0.3s; }
+        .btn:hover { background: #00f2fe; color: #090910; }
+        input { width: 100%; padding: 14px; margin: 12px 0; background: rgba(0,0,0,0.5); border: 1px solid rgba(0,242,254,0.3); border-radius: 10px; color: #00f2fe; outline: none; text-align: center; font-size: 16px; font-weight: bold; }
+
+        /* Popup — so that long content (the BEP20 form) does not get cut off on small phones,
+           we use max-height + inner scrolling */
+        .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 2000; justify-content: center; align-items: center; backdrop-filter: blur(4px); padding: 18px 14px; }
+        .popup {
+            background: linear-gradient(135deg, #171124, #0d1321); padding: 26px 22px 24px;
+            border-radius: 20px; border: 1px solid #00f2fe; text-align: center;
+            width: 100%; max-width: 360px; position: relative; margin: auto;
+            max-height: calc(100vh - 36px);
+            max-height: calc(100dvh - 36px);
+            overflow-y: auto; overscroll-behavior: contain;
+        }
+        .popup h3 { color: #00f2fe; margin-top: 0; text-transform: uppercase; font-size: clamp(15px, 4.3vw, 18px); letter-spacing: 0.5px; padding: 0 26px; }
+        .popup-close { position: absolute; top: 12px; right: 12px; background: rgba(255,8,68,0.1); border: none; color: #ff0844; font-size: 18px; cursor: pointer; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; z-index: 3; }
+        .popup-close:hover { background: #ff0844; color: #fff; }
+        .copy-hint { font-size: 11px; color: #94a3b8; margin-top: -5px; margin-bottom: 15px; }
+
+        /* 🔵 Popup round logo — one shared style for bKash / Nagad / Rocket / Binance / BEP20 */
+        .pop-logo {
+            display: block; width: 78px; height: 78px; margin: 4px auto 14px;
+            border-radius: 50%; object-fit: cover; background: #fff;
+            box-shadow: 0 0 0 2px rgba(0,242,254,0.45), 0 8px 22px rgba(0,0,0,0.55);
+        }
+        /* Box that shows the number / Binance ID — the font shrinks itself on small phones */
+        .pay-number {
+            color: #ffb199 !important; font-size: clamp(18px, 5.6vw, 24px) !important;
+            font-weight: bold; background: rgba(255,8,68,0.1) !important;
+            border: 2px solid #ffb199 !important; border-radius: 12px; padding: 15px 10px !important;
+            cursor: pointer; text-align: center; width: 100%; letter-spacing: 0.5px;
+        }
+
+        .bottom-nav { position: fixed; bottom: 15px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 600px; background: rgba(15,15,20,0.9); backdrop-filter: blur(12px); border: 1px solid rgba(0,242,254,0.3); border-radius: 22px; padding: 12px; display: flex; justify-content: space-around; align-items: center; z-index: 1000; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; color: #94a3b8; font-size: 11px; font-weight: bold; cursor: pointer; text-decoration: none; }
+        .nav-item i { font-size: 20px; margin-bottom: 5px; }
+        .nav-item.active, .nav-item:hover { color: #00f2fe; }
+        
+        .amount-highlight { font-size: 28px; font-weight: bold; color: #00f2fe; }
+        .warning-text { color: #ffb199; font-size: 12px; margin-top: 10px; }
+
+        /* Unified payment modal: amount -> destination -> transaction ID -> submit */
+        .unified-payment-popup { max-width: 430px; text-align: left; }
+        .unified-payment-popup h3 { text-align: center; }
+        .payment-kicker { color: #94a3b8; font-size: 11px; text-align: center; margin: -7px 0 18px; letter-spacing: .35px; }
+        .payment-field { margin: 0 0 17px; }
+        .payment-label { display: flex; justify-content: space-between; gap: 10px; color: #cbd5e1; font-size: 12px; font-weight: 800; margin: 0 2px 7px; }
+        .payment-label span { color: #5eead4; font-family: monospace; white-space: nowrap; }
+        .payment-input { width: 100%; margin: 0; text-align: left; }
+        .payment-helper { min-height: 17px; color: #94a3b8; font-size: 11px; line-height: 1.45; margin-top: 6px; }
+        .payment-account { margin: 0 0 17px; padding: 13px; border: 1px solid rgba(0,242,254,.22); border-radius: 13px; background: rgba(0,0,0,.28); user-select: none; }
+        .payment-account-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
+        .payment-account-label { color: #cbd5e1; font-size: 12px; font-weight: 800; }
+        .payment-copy-hint { color: #5eead4; font-size: 10.5px; font-weight: 800; white-space: nowrap; }
+        .payment-account-value { display: block; overflow-wrap: anywhere; color: #ffb199; font: 800 clamp(16px, 4.5vw, 22px)/1.35 Consolas, monospace; letter-spacing: .35px; text-align: center; padding: 12px 8px; border: 1px dashed rgba(255,177,153,.5); border-radius: 10px; background: rgba(255,8,68,.08); cursor: pointer; user-select: text; transition: background .2s ease, border-color .2s ease, box-shadow .2s ease, transform .2s ease; }
+        .payment-account-value:hover, .payment-account-value:focus-visible { border-color: rgba(255,177,153,.9); background: rgba(255,8,68,.16); box-shadow: 0 8px 24px rgba(255,8,68,.16); outline: none; }
+        .payment-account-value.copied { border-color: #5eead4; background: rgba(52,211,153,.16); box-shadow: 0 0 0 3px rgba(52,211,153,.13), 0 10px 28px rgba(52,211,153,.18); transform: translateY(-1px); }
+        .payment-account-hint { color: #64748b; font-size: 10.5px; text-align: center; margin-top: 7px; }
+        .payment-submit { margin-top: 2px; background: linear-gradient(90deg, #00b8c7, #00f2fe); color: #071018; border: 0; }
+        .payment-submit:hover { background: #5eead4; color: #071018; }
+        .payment-submit:disabled { opacity: .55; cursor: not-allowed; }
+        .payment-form-message { min-height: 18px; margin-top: 10px; color: #ff8fa8; font-size: 12px; line-height: 1.45; text-align: center; }
+        .payment-receipt-view { text-align: center; }
+        .payment-receipt-view[hidden] { display: none; }
+        .payment-receipt-status { display: inline-flex; align-items: center; gap: 7px; color: #fcd34d; border: 1px solid rgba(252,211,77,.38); background: rgba(252,211,77,.1); border-radius: 999px; padding: 6px 11px; font-size: 11px; font-weight: 800; margin: 0 0 14px; }
+        .payment-receipt-title { color: #fff; font-size: 20px; margin: 0 0 5px; }
+        .payment-receipt-amount { color: #34d399; font: 900 30px/1.2 Consolas, monospace; margin-bottom: 18px; }
+        .payment-receipt-table { text-align: left; border: 1px solid rgba(0,242,254,.2); border-radius: 12px; padding: 6px 13px; background: rgba(255,255,255,.03); }
+        .payment-receipt-row { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.08); font-size: 12px; }
+        .payment-receipt-row:last-child { border-bottom: 0; }
+        .payment-receipt-row span:first-child { color: #94a3b8; }
+        .payment-receipt-row span:last-child { color: #e2e8f0; font-weight: 800; font-family: Consolas, monospace; text-align: right; overflow-wrap: anywhere; }
+        .payment-download { margin-top: 17px; background: linear-gradient(90deg, #7c3aed, #a78bfa); border: 0; color: #fff; }
+        .payment-done { margin-top: 10px; }
+        
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-weight: bold;
+            font-size: 14px;
+            z-index: 9999;
+            animation: slideDown 0.3s ease;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+        }
+        .toast-error { background: #ff0844; color: white; }
+        .toast-success { background: #00f2fe; color: #090910; }
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+            to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+        
+        /* Block Overlay Styles */
+        #blockOverlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+            /* ⚡ backdrop-filter: blur(5px) removed — the overlay behind it is already 95%
+               opaque, so the blur had essentially nothing left to show through, while the
+               browser still had to blur the entire viewport for as long as it was open. */
+        }
+        .block-content {
+            background: linear-gradient(145deg, #1a0000, #2a0000);
+            padding: 35px 30px;
+            border-radius: 30px;
+            text-align: center;
+            max-width: 400px;
+            border: 2px solid #ff4444;
+            box-shadow: 0 0 50px rgba(255,0,0,0.5);
+        }
+        .block-content i { font-size: 60px; margin-bottom: 20px; }
+        .block-content h2 { margin-bottom: 15px; font-size: 28px; }
+        .block-content p { margin-bottom: 20px; font-size: 14px; }
+        .timer-box {
+            background: rgba(255,68,68,0.2);
+            padding: 15px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+        .timer-box p { margin-bottom: 8px; font-size: 13px; }
+        .timer-value { font-size: 28px; font-weight: bold; font-family: monospace; }
+        .block-buttons { display: flex; gap: 15px; justify-content: center; }
+        .block-btn {
+            padding: 12px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+        .block-btn-home { background: rgba(255,68,68,0.3); border: 1px solid #ff4444; color: #ff8888; }
+        .block-btn-account { background: rgba(255,68,68,0.3); border: 1px solid #ff4444; color: #ff8888; }
+        .block-btn-support { background: #ff4444; border: none; color: #fff; }
+        .block-btn:hover { transform: scale(1.02); }
+        
+        /* Support Modal */
+        .support-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.9); backdrop-filter: blur(6px);
+            z-index: 2000; display: none; justify-content: center; align-items: center;
+            /* আগে padding/overflow কিছুই ছিল না — কনটেন্ট স্ক্রিনের চেয়ে লম্বা হলে
+               center করার কারণে বাক্সের উপরের অংশ (ক্রস বাটনসহ) স্ক্রিনের বাইরে
+               চলে যেত আর স্ক্রলও করা যেত না। পেজের .popup-এ যে প্যাটার্ন আছে
+               হুবহু সেটাই এখানে দেওয়া হলো। */
+            padding: 14px; overflow-y: auto; overscroll-behavior: contain;
+            -webkit-overflow-scrolling: touch;
+        }
+        @supports (height: 100dvh) { .support-overlay { height: 100dvh; } }
+        .support-box {
+            background: linear-gradient(145deg, #0f0f17, #0a0a10);
+            padding: 30px 25px; border-radius: 28px; width: 90%; max-width: 340px;
+            text-align: center; border: 1px solid rgba(0, 242, 254, 0.4);
+            position: relative;
+            /* ভিউপোর্টের চেয়ে কখনো লম্বা হবে না — বাড়তি অংশ ভেতরে স্ক্রল হবে */
+            max-height: calc(100vh - 28px); overflow-y: auto; margin: auto;
+        }
+        @supports (max-height: 100dvh) { .support-box { max-height: calc(100dvh - 28px); } }
+        .close-modal {
+            position: absolute; top: 15px; right: 20px; color: #ff0844; font-size: 22px;
+            cursor: pointer; width: 30px; height: 30px; display: flex;
+            align-items: center; justify-content: center; border-radius: 50%;
+            background: rgba(255, 8, 68, 0.1);
+        }
+        .close-modal:hover { background: #ff0844; color: #fff; transform: rotate(90deg); }
+        .support-box h3 { color: #fff; margin-bottom: 8px; font-size: 22px; }
+        .support-box h3 i { color: #00f2fe; margin-right: 8px; }
+        .support-desc { color: #94a3b8; font-size: 13px; margin-bottom: 25px; }
+        .support-btn {
+            display: flex; align-items: center; justify-content: center; gap: 12px;
+            padding: 14px; border-radius: 14px; font-weight: 700; font-size: 16px;
+            margin-top: 12px; text-decoration: none; transition: 0.3s;
+        }
+        .btn-wa { background: rgba(37, 211, 102, 0.12); border: 1px solid #25D366; color: #25D366; }
+        .btn-wa:hover { background: #25D366; color: #fff; }
+        .btn-tg { background: rgba(0, 136, 204, 0.12); border: 1px solid #0088cc; color: #0088cc; }
+        .btn-tg:hover { background: #0088cc; color: #fff; }
+
+        /* ==================================================================
+           💸 Fund Transfer  —  exactly the same style as account.html
+           ------------------------------------------------------------------
+           Users want the "send Balance to another user" option on the Deposit page too,
+           so both the banner and the modal have been brought over here.
+           ================================================================== */
+        .ft-banner {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            width: 100%;
+            margin-bottom: 22px;
+            padding: 14px 16px;
+            border-radius: 18px;
+            cursor: pointer;
+            text-align: left;
+            border: 1px solid rgba(167, 139, 250, 0.4);
+            background:
+                radial-gradient(120% 140% at 0% 0%, rgba(37, 99, 235, 0.18) 0%, rgba(37, 99, 235, 0) 55%),
+                radial-gradient(120% 140% at 100% 100%, rgba(34, 197, 94, 0.16) 0%, rgba(34, 197, 94, 0) 55%),
+                rgba(255, 255, 255, 0.03);
+            box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
+            transition: 0.3s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .ft-banner:hover {
+            border-color: #a78bfa;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 28px rgba(124, 58, 237, 0.35);
+        }
+        .ft-banner:focus-visible { outline: 2px solid #a78bfa; outline-offset: 2px; }
+        .ft-banner-img {
+            width: 62px; height: 62px; flex-shrink: 0; object-fit: contain;
+            border-radius: 50%; background: rgba(255, 255, 255, 0.92);
+            box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.35), 0 4px 14px rgba(0, 0, 0, 0.45);
+        }
+        .ft-banner-text { flex: 1; min-width: 0; }
+        .ft-banner-text h4 { margin: 0 0 3px; font-size: 16px; font-weight: 800; color: #fff; letter-spacing: 0.3px; }
+        .ft-banner-text p { margin: 0 0 6px; font-size: 12px; color: #94a3b8; line-height: 1.35; }
+        .ft-banner-fee {
+            display: inline-flex; align-items: center; gap: 5px;
+            font-size: 10.5px; font-weight: 700; color: #c4b5fd;
+            background: rgba(167, 139, 250, 0.14); border: 1px solid rgba(167, 139, 250, 0.35);
+            padding: 3px 9px; border-radius: 20px; letter-spacing: 0.2px;
+            /* inline-flex turns every text fragment into a separate item, so
+               "Only $" / "0.01" / "fee per transfer" used to break onto separate lines.
+               Keeping the text in a single span with nowrap keeps it on one line. */
+            white-space: nowrap; max-width: 100%;
+        }
+        .ft-banner-arrow { color: #a78bfa; font-size: 15px; flex-shrink: 0; }
+
+        /* Transfer modal */
+        /* .ft-box নিজে স্ক্রল করে না — ভেতরের .ft-scroll করে। এতে ক্রস বাটনটা
+           absolute হয়েও সবসময় উপরে পিন হয়ে থাকে, স্ক্রল করলে হারিয়ে যায় না। */
+        .ft-box {
+            max-width: 380px; text-align: left; padding: 0;
+            display: flex; flex-direction: column; overflow: hidden;
+        }
+        .ft-scroll {
+            min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+            -webkit-overflow-scrolling: touch; padding: 18px 20px 22px;
+            scrollbar-width: thin; scrollbar-color: rgba(167,139,250,0.5) transparent;
+        }
+        .ft-scroll::-webkit-scrollbar { width: 6px; }
+        .ft-scroll::-webkit-scrollbar-thumb { background: rgba(167,139,250,0.45); border-radius: 3px; }
+        .ft-scroll::-webkit-scrollbar-track { background: transparent; }
+
+        /* ✕ ক্লোজ বাটন — div নয়, আসল <button> যাতে কীবোর্ড/স্ক্রিনরিডারেও কাজ করে */
+        .ft-close {
+            position: absolute; top: 11px; right: 11px; z-index: 5;
+            width: 34px; height: 34px; border-radius: 50%; padding: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 17px; line-height: 1; cursor: pointer;
+            color: #ff0844; background: rgba(255, 8, 68, 0.14);
+            border: 1px solid rgba(255, 8, 68, 0.45);
+            transition: 0.25s; -webkit-tap-highlight-color: transparent;
+        }
+        .ft-close:hover, .ft-close:focus-visible {
+            background: #ff0844; color: #fff; transform: rotate(90deg); outline: none;
+        }
+
+        .ft-box h3 { text-align: center; margin: 0 0 18px; font-size: 20px; }
+        .ft-head-icon { color: #a78bfa !important; }
+        .ft-hero {
+            /* ক্রস বাটনের নিচে যাতে লোগোটা চাপা না লাগে — উপরে একটু জায়গা */
+            display: block; width: 78px; height: 78px; margin: 10px auto 12px;
+            object-fit: contain; border-radius: 50%; background: rgba(255, 255, 255, 0.94);
+            box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.4), 0 6px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .ft-label { display: block; color: #cbd5e1; font-size: 12px; font-weight: 700; margin: 0 0 6px 2px; letter-spacing: 0.3px; }
+        /* ব্যালেন্সের আলাদা বক্স তুলে দিয়ে লেবেলের ভেতরেই ব্র্যাকেটে দেখানো হচ্ছে */
+        .ft-avail { color: #64748b; font-weight: 700; white-space: nowrap; }
+        .ft-avail b { color: #34d399; font-weight: 800; font-family: monospace; }
+        .ft-input {
+            width: 100%; padding: 13px 14px; background: rgba(0,0,0,0.5);
+            border: 1px solid rgba(167,139,250,0.35); border-radius: 12px;
+            color: #e9d5ff; outline: none; font-size: 15px; font-weight: bold;
+            font-family: monospace; letter-spacing: 0.5px; box-sizing: border-box;
+            transition: 0.2s; -moz-appearance: textfield;
+            /* The global input{} rule centres every input and adds margin — not wanted here */
+            margin: 0; text-align: left;
+        }
+        .ft-input::-webkit-outer-spin-button,
+        .ft-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .ft-input:focus { border-color: #a78bfa; box-shadow: 0 0 0 3px rgba(167,139,250,0.15); }
+        .ft-input::placeholder { color: #4b5563; font-weight: normal; letter-spacing: 0; }
+        .ft-input:disabled { opacity: 0.55; cursor: not-allowed; }
+        .ft-field { margin-bottom: 14px; }
+
+        .ft-check {
+            display: none; align-items: center; gap: 10px; margin-top: 8px;
+            padding: 10px 12px; border-radius: 10px; font-size: 12.5px; font-weight: 700;
+            line-height: 1.4; word-break: break-word;
+        }
+        .ft-check.show { display: flex; }
+        .ft-check-ok   { background: rgba(52,211,153,0.1);  border: 1px solid rgba(52,211,153,0.45);  color: #6ee7b7; }
+        .ft-check-bad  { background: rgba(255,8,68,0.1);    border: 1px solid rgba(255,8,68,0.45);    color: #ff8fa8; }
+        .ft-check-wait { background: rgba(148,163,184,0.08);border: 1px solid rgba(148,163,184,0.3);  color: #94a3b8; }
+        .ft-check i { font-size: 15px; flex-shrink: 0; }
+        .ft-check .mini-spin {
+            width: 14px; height: 14px; border: 2px solid rgba(148,163,184,0.3);
+            border-top-color: #94a3b8; border-radius: 50%; animation: spin 0.8s linear infinite;
+            flex-shrink: 0;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .ft-summary {
+            background: rgba(255,255,255,0.03); border: 1px dashed rgba(167,139,250,0.35);
+            border-radius: 12px; padding: 12px 14px; margin: 4px 0 16px;
+        }
+        .ft-sum-row { display: flex; justify-content: space-between; font-size: 12.5px; padding: 4px 0; }
+        .ft-sum-row span:first-child { color: #94a3b8; }
+        .ft-sum-row span:last-child { color: #e2e8f0; font-weight: 700; font-family: monospace; }
+        .ft-sum-row.total { border-top: 1px solid rgba(255,255,255,0.1); margin-top: 6px; padding-top: 8px; }
+        .ft-sum-row.total span:first-child { color: #cbd5e1; font-weight: 700; }
+        .ft-sum-row.total span:last-child { color: #a78bfa; font-size: 15px; }
+
+        .ft-submit {
+            width: 100%; padding: 15px; border-radius: 12px; border: none; cursor: pointer;
+            background: linear-gradient(90deg, #7c3aed, #a78bfa); color: #fff;
+            font-weight: 800; font-size: 15px; letter-spacing: 0.6px; text-transform: uppercase;
+            transition: 0.3s; margin-top: 4px;
+        }
+        .ft-submit:hover:not(:disabled) { box-shadow: 0 6px 22px rgba(124,58,237,0.55); transform: translateY(-1px); }
+        .ft-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .ft-msg { font-size: 12.5px; font-weight: 700; text-align: center; margin-top: 12px; min-height: 16px; line-height: 1.45; }
+        .ft-msg.err { color: #ff8fa8; }
+        .ft-msg.ok  { color: #6ee7b7; }
+        .ft-note { color: #64748b; font-size: 11px; text-align: center; margin-top: 14px; line-height: 1.5; }
+
+        .ft-receipt { display: none; text-align: center; }
+        .ft-receipt.show { display: block; }
+        .ft-tick {
+            width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 50%;
+            background: rgba(52,211,153,0.12); border: 2px solid #34d399;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 30px; color: #34d399;
+        }
+        .ft-receipt h4 { color: #fff; margin: 0 0 6px; font-size: 19px; }
+        .ft-receipt .amt { color: #34d399; font-size: 28px; font-weight: 900; font-family: monospace; margin-bottom: 4px; }
+        .ft-done-btn {
+            width: 100%; padding: 14px; margin-top: 16px; border-radius: 12px;
+            background: rgba(0,242,254,0.1); border: 1px solid #00f2fe; color: #00f2fe;
+            font-weight: 800; cursor: pointer; text-transform: uppercase; transition: 0.3s;
+        }
+        .ft-done-btn:hover { background: #00f2fe; color: #090910; }
+        .ft-pdf-btn { background: linear-gradient(90deg, #7c3aed, #a78bfa); border-color: transparent; color: #fff; }
+        .ft-pdf-btn:hover { background: #a78bfa; color: #fff; }
+        .ft-shake { animation: ftShake 0.35s; }
+        @keyframes ftShake {
+            0%,100% { transform: translateX(0); }
+            25% { transform: translateX(-6px); }
+            75% { transform: translateX(6px); }
+        }
+
+        /* ==================================================================
+           🟢 BEP20 (USDT · BNB Smart Chain) — styles inside the popup
+           ------------------------------------------------------------------
+           Previously BEP20 had its own large section inside the page, which
+           looked different from the bKash/Nagad/Rocket popup flow. Now BEP20 also
+           runs in exactly the same 3-step popup as they do:
+                Step 1: how much USDT to send  →  Step 2: copy the Wallet address
+                →  Step 3: submit the TxID
+           The classes below are now used inside that popup.
+           ================================================================== */
+        /* The BEP20 part inside the popup is left-aligned — .popup itself is center-aligned */
+        .bep-pop { text-align: left; }
+
+        .bep-warn {
+            display: flex; gap: 10px; align-items: flex-start;
+            background: rgba(255, 170, 68, 0.09); border: 1px solid rgba(255, 170, 68, 0.4);
+            border-radius: 12px; padding: 11px 13px; margin-bottom: 18px;
+            color: #ffd9a0; font-size: 11.5px; line-height: 1.55;
+        }
+        .bep-warn i { color: #ffaa44; font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+        .bep-warn b { color: #ffc978; }
+
+        .bep-notset {
+            display: flex; gap: 10px; align-items: flex-start;
+            background: rgba(255, 8, 68, 0.09); border: 1px solid rgba(255, 8, 68, 0.42);
+            border-radius: 12px; padding: 12px 14px;
+            color: #ff8fa8; font-size: 12px; font-weight: 600; line-height: 1.55;
+        }
+        .bep-notset i { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+
+        .bep-label {
+            display: block; color: #cbd5e1; font-size: 12px; font-weight: 700;
+            margin: 16px 0 7px 2px; letter-spacing: 0.3px;
+        }
+        .bep-label:first-child { margin-top: 0; }
+        .bep-label i { color: #5eead4; margin-right: 3px; }
+
+        /* Address box — tap to copy */
+        .bep-addr {
+            display: flex; align-items: center; gap: 10px;
+            background: rgba(0, 0, 0, 0.55); border: 1px dashed rgba(0, 191, 165, 0.55);
+            border-radius: 12px; padding: 13px 14px; cursor: pointer; transition: 0.25s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .bep-addr:hover { border-style: solid; background: rgba(0, 191, 165, 0.08); }
+        .bep-addr span {
+            flex: 1; min-width: 0; color: #5eead4; font-family: monospace;
+            font-size: 12.5px; font-weight: bold; letter-spacing: 0.4px;
+            word-break: break-all; line-height: 1.5;
+        }
+        .bep-addr i { color: #00bfa5; font-size: 15px; flex-shrink: 0; }
+        .bep-hint { font-size: 11px; color: #94a3b8; margin: 6px 0 0 2px; }
+
+        .bep-input {
+            width: 100%; padding: 13px 14px; background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(0, 191, 165, 0.35); border-radius: 12px;
+            color: #ccfbf1; outline: none; font-size: 14px; font-weight: bold;
+            font-family: monospace; box-sizing: border-box; transition: 0.2s;
+            -moz-appearance: textfield;
+            /* Override the global input{} rule */
+            margin: 0; text-align: left; letter-spacing: 0.3px;
+        }
+        .bep-input::-webkit-outer-spin-button,
+        .bep-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .bep-input:focus { border-color: #00bfa5; box-shadow: 0 0 0 3px rgba(0, 191, 165, 0.15); }
+        .bep-input::placeholder { color: #4b5563; font-weight: normal; letter-spacing: 0; }
+        .bep-input:disabled { opacity: 0.55; cursor: not-allowed; }
+        .bep-input-hash { font-size: 12px; letter-spacing: 0; }
+
+        .bep-check {
+            display: none; align-items: center; gap: 9px; margin-top: 8px;
+            padding: 10px 12px; border-radius: 10px; font-size: 12px; font-weight: 700;
+            line-height: 1.45; word-break: break-word; text-align: left;
+        }
+        .bep-check.show { display: flex; }
+        .bep-check-ok  { background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.45); color: #6ee7b7; }
+        .bep-check-bad { background: rgba(255,8,68,0.1);   border: 1px solid rgba(255,8,68,0.45);   color: #ff8fa8; }
+        .bep-check i { font-size: 14px; flex-shrink: 0; }
+
+        .bep-conv { font-size: 11.5px; color: #94a3b8; margin: 7px 0 0 2px; }
+        .bep-conv b { color: #5eead4; font-family: monospace; }
+
+        .bep-submit {
+            margin-top: 20px !important;
+            background: linear-gradient(90deg, #00897b, #00bfa5) !important;
+            border: none !important; color: #04241f !important; font-weight: 900 !important;
+        }
+        .bep-submit:hover:not(:disabled) { box-shadow: 0 6px 22px rgba(0, 191, 165, 0.5); color: #04241f !important; }
+        .bep-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .bep-msg { font-size: 12.5px; font-weight: 700; text-align: center; margin-top: 12px; min-height: 16px; line-height: 1.5; }
+        .bep-msg.err { color: #ff8fa8; }
+        .bep-msg.ok  { color: #6ee7b7; }
+        .bep-note { color: #64748b; font-size: 11px; text-align: center; margin-top: 14px; line-height: 1.55; }
+
+        /* ==================================================================
+           📱 → 💻  Responsive  —  Mobile / Tablet / PC
+           ------------------------------------------------------------------
+           Three breakpoints, all three with the same goal: gateway cards, text, spacing
+           and logos must never overlap or sit cramped against each other anywhere.
+           ================================================================== */
+
+        /* Small phones — everything a little more compact, grid stays fixed at 2 columns */
+        @media (max-width: 400px) {
+            .container { padding: 16px 12px 8px; }
+            .pay-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+            .pay-card { padding: 15px 8px 13px; border-radius: 16px; gap: 8px; }
+            .pay-card img, .pay-logo { width: 52px; height: 52px; }
+            .pay-card h4 { font-size: 12.8px; }
+            .pay-card .pay-sub { font-size: 9.5px; }
+            .popup { padding: 22px 15px 20px; border-radius: 18px; }
+            .pop-logo { width: 66px; height: 66px; margin-bottom: 12px; }
+            .ft-banner { gap: 11px; padding: 12px 13px; }
+            .ft-banner-img { width: 54px; height: 54px; }
+            .ft-banner-text h4 { font-size: 15px; }
+            .ft-banner-text p { font-size: 11.5px; }
+            .bep-addr span { font-size: 11px; }
+            .bep-addr { padding: 12px 11px; }
+        }
+
+        /* Very narrow phones keep two columns for predictable mobile scanning. */
+        @media (max-width: 330px) {
+            .pay-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+            .pay-card { padding: 12px 6px 11px; gap: 7px; }
+            .pay-card img, .pay-logo { width: 48px; height: 48px; }
+            .pay-card h4 { font-size: 12px; }
+            .pay-card .pay-sub { font-size: 8.7px; }
+        }
+
+        /* Tablet — more room, so both the cards and the logos are a little larger */
+        @media (min-width: 600px) {
+            .container { padding: 24px 22px 12px; }
+            .pay-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+            .pay-card { padding: 22px 14px 18px; }
+            .pay-card img, .pay-logo { width: 68px; height: 68px; }
+            .pay-card h4 { font-size: 15.5px; }
+            .ft-banner { padding: 16px 18px; }
+        }
+
+        /* PC / large screens — four gateways per row, equally sized */
+        @media (min-width: 1024px) {
+            .container { padding: 30px 24px 20px; }
+            .pay-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
+            .pay-card { padding: 26px 16px 20px; }
+            .pay-card img, .pay-logo { width: 74px; height: 74px; }
+            .pay-card h4 { font-size: 16px; }
+            .popup { max-width: 400px; padding: 30px 26px 26px; }
+            .pop-logo { width: 86px; height: 86px; }
+        }
+    </style>
+
+    <!-- Animated theme (background colour animation + card animations) -->
+    <link rel="preload" as="style" href="user-theme.css?v=6">
+    <link rel="stylesheet" href="user-theme.css?v=6">
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <h1 id="brandName">𝗦𝗢𝗛𝗔𝗚 𝗕𝗗 𝗦𝗛𝗢𝗣</h1>
+        </div>
+        <div class="header-actions">
+            <div class="header-balance" title="Wallet balance">
+                <i class="fa-solid fa-wallet hb-icon"></i>
+                <span class="hb-text">
+                    <span class="hb-label">Balance</span>
+                    <span class="header-wallet" id="walletDisplay">$0.00</span>
+                </span>
+            </div>
+            <div class="header-icon" onclick="window.location.href='account.html'">
+                <i class="fa-solid fa-user-astronaut"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2 class="title" id="t-deposit">Deposit Funds</h2>
+        <p class="page-sub" id="d-sub">Choose your gateway below to fund your wallet securely.</p>
+
+        <!-- 💸 Fund Transfer — Balance can be sent from the Deposit page as well -->
+        <div class="ft-banner" id="transferBtn" role="button" tabindex="0"
+             onclick="openTransferModal()"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openTransferModal();}">
+            <img class="ft-banner-img" src="fund-transfer.png" alt="Fund Transfer" width="62" height="62" loading="lazy" decoding="async">
+            <div class="ft-banner-text">
+                <h4 id="ft-b-title">Fund Transfer</h4>
+                <p id="ft-b-sub">Send balance to another user instantly by their User ID.</p>
+                <span class="ft-banner-fee"><i class="fa-solid fa-tag"></i><span>Only $<span id="ftBannerFee">0.02</span> fee per transfer</span></span>
+            </div>
+            <i class="fa-solid fa-chevron-right ft-banner-arrow"></i>
+        </div>
+
+        <!-- Gateway cards — every logo sits on a round plate of the same size, so every row
+             lines up perfectly (mobile 2, tablet 3, PC 5 columns) -->
+        <div class="pay-grid px-stagger">
+            <div class="pay-card" role="button" tabindex="0" onclick="openAmountModal('bKash')">
+                <img class="pay-logo" src="bkash.png" alt="bKash" width="60" height="60" decoding="async">
+                <h4>bKash<span class="pay-sub">Mobile Banking · BDT</span></h4>
+            </div>
+            <div class="pay-card" role="button" tabindex="0" onclick="openAmountModal('Nagad')">
+                <img class="pay-logo" src="nagad.png" alt="Nagad" width="60" height="60" decoding="async">
+                <h4>Nagad<span class="pay-sub">Mobile Banking · BDT</span></h4>
+            </div>
+            <div class="pay-card" role="button" tabindex="0" onclick="openAmountModal('Rocket')">
+                <img class="pay-logo" src="rocket.png" alt="Rocket" width="60" height="60" decoding="async">
+                <h4>Rocket<span class="pay-sub">Mobile Banking · BDT</span></h4>
+            </div>
+            <div class="pay-card" role="button" tabindex="0" onclick="openAmountModal('Binance')">
+                <img class="pay-logo" src="binance.png" alt="Binance" width="60" height="60" decoding="async">
+                <h4>Binance<span class="pay-sub">Binance Pay · USD</span></h4>
+            </div>
+            <!-- 🟢 BEP20 — opens in the same popup flow as bKash/Nagad/Rocket -->
+            <div class="pay-card" role="button" tabindex="0" onclick="openAmountModal('BEP20')">
+                <img class="pay-logo" src="bep20.png" alt="USDT BEP20" width="60" height="60" decoding="async">
+                <h4>BEP20<span class="pay-sub">USDT · BNB Smart Chain</span></h4>
+            </div>
+        </div>
+    </div>
+
+    <!-- Block Overlay -->
+    <div id="blockOverlay">
+        <div class="block-content" id="blockContent">
+            <div id="permanentBlockDiv" style="display: none;">
+                <i class="fa-solid fa-ban" style="color: #ff4444;"></i>
+                <h2 style="color: #ff4444;">⛔ Account Permanently Banned</h2>
+                <p id="permanentReason" style="color: #ffb3b3;">Your account has been permanently banned for violating our terms.</p>
+                <div class="timer-box">
+                    <p style="color: #ff8888;">You can no longer make deposits or place orders.</p>
+                </div>
+                <div class="block-buttons">
+                    <button class="block-btn block-btn-home" onclick="window.location.href='index.html'">🏠 Home</button>
+                    <button class="block-btn block-btn-support" onclick="openSupportModalFromBlock()">🆘 Support</button>
+                </div>
+            </div>
+            <div id="temporaryBlockDiv" style="display: none;">
+                <i class="fa-solid fa-clock" style="color: #ffaa44;"></i>
+                <h2 style="color: #ffaa44;">⚠️ Temporary Block (3 Days)</h2>
+                <p id="tempReason" style="color: #ffdd99;">You have made 3 rejected deposit attempts in a row.</p>
+                <div class="timer-box">
+                    <p style="color: #ffcc88;">🔒 Deposit access temporarily restricted</p>
+                    <p class="timer-value" id="timerValue">--:--:--</p>
+                    <p id="unblockDate" style="color: #ffcc88; font-size: 12px;"></p>
+                </div>
+                <div class="block-buttons">
+                    <button class="block-btn block-btn-home" onclick="window.location.href='index.html'">🏠 Home</button>
+                    <button class="block-btn block-btn-account" onclick="window.location.href='account.html'">👤 Account</button>
+                    <button class="block-btn block-btn-support" onclick="openSupportModalFromBlock()">🆘 Support</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ Unified payment modal ============ -->
+    <div class="overlay" id="paymentModal" aria-hidden="true">
+        <div class="popup unified-payment-popup" role="dialog" aria-modal="true" aria-labelledby="paymentModalTitle">
+            <button class="popup-close" type="button" onclick="closePaymentModal()" aria-label="Close payment dialog"><i class="fa-solid fa-times"></i></button>
+
+            <div id="paymentFormView">
+                <img class="pop-logo" id="paymentModalLogo" src="bkash.png" alt="Payment method" width="78" height="78" decoding="async">
+                <div class="payment-kicker">Secure payment submission</div>
+                <h3 id="paymentModalTitle">Deposit via bKash</h3>
+
+                <div class="payment-field">
+                    <label class="payment-label" for="paymentAmount">Amount <span id="paymentAmountUnit">BDT</span></label>
+                    <input class="payment-input" type="number" id="paymentAmount" inputmode="decimal" min="0.01" step="0.01" placeholder="Enter amount" oninput="paymentAmountChanged()">
+                    <div class="payment-helper" id="paymentAmountHelper">Enter the exact amount you will send.</div>
+                </div>
+
+                <div class="payment-account" id="paymentAccount">
+                    <div class="payment-account-head">
+                        <span class="payment-account-label" id="paymentAccountLabel">bKash number</span>
+                        <span class="payment-copy-hint"><i class="fa-regular fa-copy"></i> Click to copy</span>
+                    </div>
+                    <code class="payment-account-value" id="paymentAccountValue" role="button" tabindex="0" aria-label="Copy payment destination" onclick="copyPaymentAccount()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();copyPaymentAccount();}">-</code>
+                    <div class="payment-account-hint" id="paymentAccountHint">Click the address above to copy the payment destination.</div>
+                </div>
+
+                <div class="payment-field">
+                    <label class="payment-label" for="paymentTrx" id="paymentTrxLabel">Transaction ID (TrxID)</label>
+                    <input class="payment-input" type="text" id="paymentTrx" maxlength="100" autocomplete="off" placeholder="Enter your TrxID (e.g., 9J82KLMNO)">
+                    <div class="payment-helper" id="paymentTrxHelper">Enter the ID shown by your payment provider.</div>
+                </div>
+
+                <button class="btn payment-submit" id="paymentSubmit" type="button" onclick="submitUnifiedPayment()"><i class="fa-solid fa-paper-plane"></i> Submit Payment</button>
+                <div class="payment-form-message" id="paymentFormMessage" role="status" aria-live="polite"></div>
+            </div>
+
+            <div class="payment-receipt-view" id="paymentReceiptView" hidden>
+                <div class="ft-tick"><i class="fa-solid fa-check"></i></div>
+                <div class="payment-receipt-status"><i class="fa-solid fa-clock"></i> <span id="paymentReceiptStatus">Pending verification</span></div>
+                <h3 class="payment-receipt-title">Payment Submitted</h3>
+                <div class="payment-receipt-amount" id="paymentReceiptAmount">$0.00</div>
+                <div class="payment-receipt-table">
+                    <div class="payment-receipt-row"><span>Payment method</span><span id="paymentReceiptMethod">-</span></div>
+                    <div class="payment-receipt-row"><span id="paymentReceiptTrxLabel">TrxID</span><span id="paymentReceiptTrx">-</span></div>
+                    <div class="payment-receipt-row"><span>Date &amp; time</span><span id="paymentReceiptDate">-</span></div>
+                    <div class="payment-receipt-row"><span>Payment status</span><span id="paymentReceiptStatusValue">Pending</span></div>
+                </div>
+                <button class="btn payment-download" type="button" onclick="downloadPaymentReceipt()"><i class="fa-solid fa-file-arrow-down"></i> Download PDF Receipt</button>
+                <button class="btn payment-done" type="button" onclick="closePaymentModal()"><i class="fa-solid fa-check"></i> Done</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="bottom-nav">
+        <a href="index.html" class="nav-item"><i class="fa-solid fa-store"></i><span id="n-buy">Shop</span></a>
+        <a href="deposit.html" class="nav-item active"><i class="fa-solid fa-wallet"></i><span id="n-dep">Deposit</span></a>
+        <a href="pending.html" class="nav-item"><i class="fa-solid fa-clock-rotate-left"></i><span id="n-pen">Pending</span></a>
+        <a href="orders.html" class="nav-item"><i class="fa-solid fa-box-open"></i><span id="n-ord">Orders</span></a>
+        <a href="#" class="nav-item" id="navSupport" onclick="openSupportModal(event)"><i class="fa-solid fa-headset"></i><span id="n-sup">Support</span></a>
+    </div>
+
+    <!-- ============ 💸 Fund Transfer modal ============ -->
+    <div class="support-overlay" id="transferModal">
+        <div class="support-box ft-box">
+            <!-- ✕ বাটনটা .ft-scroll-এর বাইরে, তাই স্ক্রল করলেও উপরেই পিন থাকে -->
+            <button type="button" class="ft-close" onclick="closeTransferModal()"
+                    aria-label="Close fund transfer"><i class="fa-solid fa-times"></i></button>
+
+            <div class="ft-scroll">
+            <!-- Step 1: form -->
+            <div id="ftForm">
+                <img class="ft-hero" src="fund-transfer.png" alt="Fund Transfer" width="78" height="78" decoding="async">
+                <h3><i class="fa-solid fa-paper-plane ft-head-icon"></i> Fund Transfer</h3>
+
+                <div class="ft-field">
+                    <label class="ft-label" for="ftRecipient"><i class="fa-regular fa-id-card"></i> Recipient User ID (Telegram ID)</label>
+                    <input class="ft-input" type="text" id="ftRecipient" inputmode="numeric" autocomplete="off"
+                           placeholder="e.g. 1837884159" maxlength="15"
+                           oninput="ftOnRecipientInput()"
+                           onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('ftAmount').focus();}">
+                    <div class="ft-check" id="ftCheck"></div>
+                </div>
+
+                <div class="ft-field">
+                    <label class="ft-label" for="ftAmount"><i class="fa-solid fa-dollar-sign"></i> Amount to Send (USD)
+                        <span class="ft-avail">(Available: <b id="ftBalance">$0.00</b>)</span>
+                    </label>
+                    <input class="ft-input" type="number" id="ftAmount" inputmode="decimal" step="0.01" min="0.01"
+                           autocomplete="off" placeholder="0.00"
+                           oninput="ftRecalc()"
+                           onkeydown="if(event.key==='Enter'){event.preventDefault();submitTransfer();}">
+                </div>
+
+                <div class="ft-summary">
+                    <div class="ft-sum-row"><span>Amount to send</span><span id="ftSumAmount">$0.00</span></div>
+                    <div class="ft-sum-row"><span>Transfer fee (from amount)</span><span id="ftSumFee">− $0.02</span></div>
+                    <div class="ft-sum-row"><span>Recipient gets</span><span id="ftSumNet">$0.00</span></div>
+                    <div class="ft-sum-row total"><span>Deducted from you</span><span id="ftSumTotal">$0.00</span></div>
+                </div>
+
+                <button class="ft-submit" id="ftSubmit" onclick="submitTransfer()">
+                    <i class="fa-solid fa-paper-plane"></i> Send Funds
+                </button>
+                <div class="ft-msg" id="ftMsg"></div>
+                <div class="ft-note">
+                    <i class="fa-solid fa-shield-halved"></i> Transfers are instant and <b>cannot be reversed</b>.<br>
+                    The fee is taken <b>out of the amount</b> — only the amount you type is deducted from your balance.<br>
+                    Double-check the recipient User ID before sending.
+                </div>
+            </div>
+
+            <!-- Step 2: success receipt -->
+            <div class="ft-receipt" id="ftReceipt">
+                <div class="ft-tick"><i class="fa-solid fa-check"></i></div>
+                <h4>Transfer Successful</h4>
+                <div class="amt" id="ftRcAmount">$0.00</div>
+                <div style="color:#94a3b8; font-size:12.5px; margin-bottom:16px;">
+                    sent to <b style="color:#e2e8f0;" id="ftRcName">-</b>
+                </div>
+                <div class="ft-summary" style="text-align:left; border-style:solid;">
+                    <div class="ft-sum-row"><span>Transfer ID</span><span id="ftRcId" style="font-size:11px;">-</span></div>
+                    <div class="ft-sum-row"><span>Recipient ID</span><span id="ftRcTo">-</span></div>
+                    <div class="ft-sum-row"><span>Deducted from you</span><span id="ftRcSent">$0.00</span></div>
+                    <div class="ft-sum-row"><span>Transfer fee (from amount)</span><span id="ftRcFee">− $0.02</span></div>
+                    <div class="ft-sum-row"><span>Recipient received</span><span id="ftRcNet">$0.00</span></div>
+                    <div class="ft-sum-row total"><span>New balance</span><span id="ftRcBal">$0.00</span></div>
+                </div>
+                <button class="ft-done-btn ft-pdf-btn" type="button" onclick="downloadFundTransferReceipt()"><i class="fa-solid fa-file-arrow-down"></i> Download PDF Receipt</button>
+                <button class="ft-done-btn" onclick="closeTransferModal()"><i class="fa-solid fa-check"></i> Done</button>
+            </div>
+            </div><!-- /.ft-scroll -->
+        </div>
+    </div>
+
+    <!-- Support Modal -->
+    <div class="support-overlay" id="supportModal">
+        <div class="support-box">
+            <div class="close-modal" onclick="closeSupportModal()"><i class="fa-solid fa-times"></i></div>
+            <h3><i class="fa-solid fa-headset"></i> Live Support</h3>
+            <div class="support-desc">Choose a platform to contact us.</div>
+            <a href="https://wa.me/8801618202470" target="_blank" class="support-btn btn-wa"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>
+            <a href="https://t.me/SH_5617" target="_blank" class="support-btn btn-tg"><i class="fa-brands fa-telegram"></i> Telegram</a>
+        </div>
+    </div>
+
+    <script>
+        let currentMethod = "", currentAmount = "", currentUSD = "";
+        let blockCheckInterval = null;
+        
+        const PAYMENT_NUMBERS = { bKash: "01618202470", Nagad: "01618202470", Rocket: "01618202470", Binance: "976268542" };
+        let exchangeRate = 130;
+
+        /* Logo of each method — this same image is placed as a circle in all three popup steps */
+        const METHOD_LOGOS = {
+            bKash:   'bkash.png',
+            Nagad:   'nagad.png',
+            Rocket:  'rocket.png',
+            Binance: 'binance.png',
+            BEP20:   'bep20.png'
+        };
+
+        /** Sets the round logo for all three popup steps at once */
+        function setMethodLogos(method) {
+            const src = METHOD_LOGOS[method] || 'logo.png';
+            const alt = method + ' logo';
+            ['depAmountLogo', 'depInstrLogo', 'depTrxLogo'].forEach(function (id) {
+                const el = document.getElementById(id);
+                if (el) { el.src = src; el.alt = alt; }
+            });
+        }
+
+        /* ==================================================================
+           🟢 BEP20 (USDT · BNB Smart Chain) Settings
+           ------------------------------------------------------------------
+           ⚠️ Admin — to change the Wallet, edit only the line below:
+                 BEP20_ADDRESS = "0x....";   ← the real BEP20 Wallet address
+
+           প্লেসহোল্ডার বা ভুল ফরম্যাটের অ্যাড্রেস বসালে পেজ নিজেই BEP20
+           Deposit disabled and shows "temporarily unavailable" — deliberately,
+           so that nobody sends USDT to a wrong address or to someone else.
+           ================================================================== */
+        const BEP20_ADDRESS = "0xe97a610a6dff720689292f114ebd51380627580f";
+        const BEP20_MIN     = 1;      // Minimum Deposit (USDT)
+        const BEP20_MAX     = 100000; // Ceiling to guard against typos
+        const BEP20_RATE    = 1;      // 1 USDT = $1.00
+
+        /** Whether the address is a real BEP20 address (0x + 40 hex characters) */
+        function bepAddressValid() {
+            return /^0x[a-fA-F0-9]{40}$/.test(String(BEP20_ADDRESS || '').trim());
+        }
+        
+        const BALANCE_API = 'api_balance.php';
+        const BLOCK_CHECK_API = 'api_check_block.php';
+        
+        function showToast(message, type = 'success') {
+            let toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.innerHTML = `<i class="fa-solid ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-triangle'}"></i> ${message}`;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.style.animation = 'slideDown 0.3s ease reverse';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+        
+        function openSupportModal(e) {
+            if(e) e.preventDefault();
+            document.getElementById('supportModal').style.display = 'flex';
+        }
+        
+        function openSupportModalFromBlock() {
+            document.getElementById('supportModal').style.display = 'flex';
+        }
+        
+        function closeSupportModal() {
+            document.getElementById('supportModal').style.display = 'none';
+        }
+        
+        // ========== Block check function ==========
+        async function checkBlockStatus() {
+            let userTelegramId = localStorage.getItem('userTelegramId');
+            if(!userTelegramId) return false;
+            
+            try {
+                const response = await fetch(`${BLOCK_CHECK_API}?telegram_id=${userTelegramId}`);
+                const data = await response.json();
+                
+                if(data.blocked) {
+                    showBlockOverlay(data);
+                    return true;
+                } else {
+                    hideBlockOverlay();
+                    return false;
+                }
+            } catch(e) {
+                console.log("Block check error:", e);
+                return false;
+            }
+        }
+        
+        function showBlockOverlay(data) {
+            let overlay = document.getElementById('blockOverlay');
+            let permanentDiv = document.getElementById('permanentBlockDiv');
+            let temporaryDiv = document.getElementById('temporaryBlockDiv');
+
+            // The transfer / BEP20 code reads this flag and stops on its own
+            window.userIsBlocked = true;
+
+            // If Blocked, close the transfer modal even if it is open
+            let tm = document.getElementById('transferModal');
+            if (tm && tm.style.display === 'flex') tm.style.display = 'none';
+
+            // Disable all form elements
+            // (.ft-banner / .ft-submit were added later — so that a Blocked user
+            //  cannot make a transfer or a BEP20 Deposit either)
+            document.querySelectorAll('.pay-card, .btn, input, .pay-grid, .ft-banner, .ft-submit').forEach(el => {
+                el.style.pointerEvents = 'none';
+                el.style.opacity = '0.5';
+            });
+            
+            if(data.permanent) {
+                permanentDiv.style.display = 'block';
+                temporaryDiv.style.display = 'none';
+                document.getElementById('permanentReason').innerHTML = data.reason || 'Your account has been permanently banned. Please contact support.';
+            } else {
+                permanentDiv.style.display = 'none';
+                temporaryDiv.style.display = 'block';
+                document.getElementById('tempReason').innerHTML = data.reason || 'You have made 3 rejected deposit attempts in a row.';
+                startBlockTimer(data.unblock_time);
+            }
+            overlay.style.display = 'flex';
+        }
+        
+        function hideBlockOverlay() {
+            let overlay = document.getElementById('blockOverlay');
+            overlay.style.display = 'none';
+            window.userIsBlocked = false;
+
+            // Re-enable the form
+            document.querySelectorAll('.pay-card, .btn, input, .pay-grid, .ft-banner, .ft-submit').forEach(el => {
+                el.style.pointerEvents = '';
+                el.style.opacity = '';
+            });
+        }
+        
+        let timerInterval = null;
+        
+        function startBlockTimer(unblockTimestamp) {
+            if(timerInterval) clearInterval(timerInterval);
+            
+            let timerElement = document.getElementById('timerValue');
+            let dateElement = document.getElementById('unblockDate');
+            let unblockDate = new Date(unblockTimestamp * 1000);
+            dateElement.innerHTML = '📅 Unblock: ' + unblockDate.toLocaleString();
+            
+            function updateTimer() {
+                let now = Math.floor(Date.now() / 1000);
+                let remaining = unblockTimestamp - now;
+                
+                if(remaining <= 0) {
+                    timerElement.innerHTML = '00:00:00';
+                    clearInterval(timerInterval);
+                    location.reload();
+                    return;
+                }
+                
+                let days = Math.floor(remaining / 86400);
+                let hours = Math.floor((remaining % 86400) / 3600);
+                let minutes = Math.floor((remaining % 3600) / 60);
+                let seconds = remaining % 60;
+                
+                if(days > 0) {
+                    timerElement.innerHTML = days + 'd ' + hours.toString().padStart(2,'0') + ':' + minutes.toString().padStart(2,'0') + ':' + seconds.toString().padStart(2,'0');
+                } else {
+                    timerElement.innerHTML = hours.toString().padStart(2,'0') + ':' + minutes.toString().padStart(2,'0') + ':' + seconds.toString().padStart(2,'0');
+                }
+            }
+            
+            updateTimer();
+            timerInterval = setInterval(updateTimer, 1000);
+        }
+        
+        // ========== TrxID input validation ==========
+        function setupTrxInputValidation() {
+            let trxInput = document.getElementById('trxId');
+            if(!trxInput) return;
+            
+            trxInput.addEventListener('input', function(e) {
+                let value = this.value;
+                
+                // Bengali/Unicode character check
+                if(/[^\x00-\x7F]/.test(value)) {
+                    showToast('❌ Please use only English letters, numbers, dash(-) and underscore(_). Bangla characters are not allowed.', 'error');
+                    this.value = value.replace(/[^\x00-\x7F]/g, '');
+                    return;
+                }
+                
+                // Allowed character check
+                if(/[^a-zA-Z0-9_-]/.test(value)) {
+                    this.value = value.replace(/[^a-zA-Z0-9_-]/g, '');
+                }
+                
+                // Length limit 100
+                if(this.value.length > 100) {
+                    this.value = this.value.slice(0, 100);
+                    showToast('❌ Transaction ID cannot exceed 100 characters.', 'error');
+                }
+
+                // 🟢 For BEP20 the hash is validated live (0x + 64 characters)
+                if(currentMethod === 'BEP20') bepLiveCheck();
+            });
+        }
+        
+        // ========== Live Balance load ==========
+        async function loadUserBalance() {
+            let userTelegramId = localStorage.getItem('userTelegramId');
+            const wallet = document.getElementById('walletDisplay');
+            if(!userTelegramId) {
+                if (wallet) wallet.innerHTML = '$0.00';
+                return;
+            }
+            const cacheKey = 'balance:' + userTelegramId;
+            const paint = (value) => {
+                if (wallet) wallet.innerHTML = '$' + parseFloat(value || 0).toFixed(2);
+            };
+            if (window.SBD && SBD.cacheGet) {
+                const cached = SBD.cacheGet(cacheKey, true);
+                if (cached && cached.success) paint(cached.balance);
+            }
+            try {
+                const response = await fetch(`${BALANCE_API}?telegram_id=${userTelegramId}`);
+                const data = await response.json();
+                if(data.success) {
+                    paint(data.balance);
+                    if (window.SBD && SBD.cacheSet) SBD.cacheSet(cacheKey, data, 5 * 60 * 1000);
+                }
+            } catch(e) { 
+                console.log("Balance load error:", e);
+            }
+        }
+
+        // ========== Page load ==========
+        window.addEventListener('DOMContentLoaded', async () => {
+            const rateEl = document.getElementById('rateShow');
+            if (rateEl) rateEl.innerText = exchangeRate;
+            loadUserBalance();
+            
+            // Block check
+            let isBlocked = await checkBlockStatus();
+            if(!isBlocked) {
+                // Block check every 30 seconds
+                if (window.SBD && SBD.poll) SBD.poll(checkBlockStatus, 30000);
+                else setInterval(checkBlockStatus, 30000);
+            }
+            
+            // TrxID input validation setup
+            setupTrxInputValidation();
+            setupPaymentInputValidation();
+
+            // 🟢 Build the BEP20 popup (fill in the Wallet address / keep it disabled when not configured)
+            bepInit();
+
+            // Balance update: every 15 seconds, paused while the tab is not visible
+            if (window.SBD && SBD.poll) SBD.poll(loadUserBalance, 15000);
+            else setInterval(function() { if (!document.hidden) loadUserBalance(); }, 15000);
+        });
+
+        function openPopup(id) { document.getElementById(id).style.display = 'flex'; }
+        function closePopup(id) { document.getElementById(id).style.display = 'none'; }
+
+        let paymentReceiptData = null;
+
+        function paymentUnit(method) {
+            return method === 'Binance' ? 'USD' : (method === 'BEP20' ? 'USDT' : 'BDT');
+        }
+
+        function paymentDestination(method) {
+            return method === 'BEP20' ? BEP20_ADDRESS : (PAYMENT_NUMBERS[method] || '');
+        }
+
+        function paymentDestinationLabel(method) {
+            if (method === 'Binance') return 'Binance UID';
+            if (method === 'BEP20') return 'BEP20 wallet address';
+            return method + ' mobile banking number';
+        }
+
+        function paymentTrxFieldLabel(method) {
+            if (method === 'Binance') return 'Binance Order ID';
+            if (method === 'BEP20') return 'Transaction ID';
+            return 'Transaction ID (TrxID)';
+        }
+
+        function paymentTrxReceiptLabel(method) {
+            if (method === 'Binance') return 'Binance Order ID';
+            if (method === 'BEP20') return 'Transaction ID';
+            return 'TrxID';
+        }
+
+        function paymentTrxPlaceholder(method) {
+            if (method === 'Binance') return 'Enter your Binance Order ID';
+            if (method === 'BEP20') return 'Enter Transaction ID';
+            return 'Enter your TrxID (e.g., 9J82KLMNO)';
+        }
+
+        function paymentSetMessage(message) {
+            const el = document.getElementById('paymentFormMessage');
+            if (el) el.textContent = message || '';
+        }
+
+        function resetPaymentModal() {
+            paymentReceiptData = null;
+            document.getElementById('paymentFormView').style.display = 'block';
+            document.getElementById('paymentReceiptView').hidden = true;
+            document.getElementById('paymentAmount').value = '';
+            document.getElementById('paymentTrx').value = '';
+            document.getElementById('paymentAccountValue').classList.remove('copied');
+            document.getElementById('paymentSubmit').disabled = false;
+            document.getElementById('paymentSubmit').innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Payment';
+            paymentSetMessage('');
+        }
+
+        /** Opens one modal containing amount, destination, transaction ID and submit. */
+        function openAmountModal(method) {
+            currentMethod = method;
+            currentAmount = '';
+            currentUSD = '';
+
+            if (method === 'BEP20' && !bepAddressValid()) {
+                showToast('⚠️ BEP20 deposits are temporarily unavailable.', 'error');
+                return;
+            }
+
+            resetPaymentModal();
+            const unit = paymentUnit(method);
+            const destination = paymentDestination(method);
+            const logo = document.getElementById('paymentModalLogo');
+            logo.src = METHOD_LOGOS[method] || 'logo.png';
+            logo.alt = method + ' logo';
+            document.getElementById('paymentModalTitle').textContent = 'Deposit via ' + method;
+            document.getElementById('paymentAccountValue').setAttribute('aria-label', 'Copy ' + paymentDestinationLabel(method));
+            document.getElementById('paymentAmountUnit').textContent = unit;
+            document.getElementById('paymentAmount').placeholder = 'Enter amount in ' + unit;
+            document.getElementById('paymentAccountLabel').textContent = paymentDestinationLabel(method);
+            document.getElementById('paymentAccountValue').textContent = destination || '-';
+            document.getElementById('paymentAccountHint').textContent = method === 'BEP20'
+                ? 'Send USDT only over the BEP20 (BNB Smart Chain) network.'
+                : 'Click the address above to copy the payment destination.';
+            document.getElementById('paymentTrxLabel').textContent = paymentTrxFieldLabel(method);
+            document.getElementById('paymentTrx').placeholder = paymentTrxPlaceholder(method);
+            document.getElementById('paymentTrxHelper').textContent = method === 'BEP20'
+                ? 'A valid BEP20 transaction ID starts with 0x and contains 64 hexadecimal characters.'
+                : 'Enter the ID shown by your payment provider.';
+            document.getElementById('paymentAmount').setAttribute('min', method === 'BEP20' ? BEP20_MIN : '0.01');
+            document.getElementById('paymentModal').style.display = 'flex';
+            document.getElementById('paymentModal').setAttribute('aria-hidden', 'false');
+            setTimeout(() => { try { document.getElementById('paymentAmount').focus(); } catch (e) {} }, 120);
+        }
+
+        function closePaymentModal() {
+            const modal = document.getElementById('paymentModal');
+            if (!modal) return;
+            modal.style.display = 'none';
+            modal.setAttribute('aria-hidden', 'true');
+        }
+
+        function paymentAmountChanged() {
+            const raw = parseFloat(document.getElementById('paymentAmount').value);
+            const amount = isFinite(raw) && raw > 0 ? raw : 0;
+            currentAmount = amount ? String(raw) : '';
+            currentUSD = amount ? (currentMethod === 'bKash' || currentMethod === 'Nagad' || currentMethod === 'Rocket'
+                ? (amount / exchangeRate).toFixed(2) : (amount * (currentMethod === 'BEP20' ? BEP20_RATE : 1)).toFixed(2)) : '';
+            const helper = document.getElementById('paymentAmountHelper');
+            if (!amount) {
+                helper.textContent = 'Enter the exact amount you will send.';
+            } else if (currentMethod === 'BEP20') {
+                helper.textContent = 'You will be credited $' + (amount * BEP20_RATE).toFixed(2) + '. Minimum ' + BEP20_MIN.toFixed(2) + ' USDT.';
+            } else if (currentMethod === 'Binance') {
+                helper.textContent = 'You will be credited $' + amount.toFixed(2) + '.';
+            } else {
+                helper.textContent = 'You will be credited approximately $' + (amount / exchangeRate).toFixed(2) + ' at 1 USD = ' + exchangeRate + ' BDT.';
+            }
+        }
+
+        function copyPaymentAccount() {
+            const value = paymentDestination(currentMethod);
+            if (!value) return;
+            const done = () => {
+                const account = document.getElementById('paymentAccountValue');
+                const hint = document.getElementById('paymentAccountHint');
+                if (account) account.classList.add('copied');
+                hint.textContent = 'Copied to clipboard.';
+                hint.style.color = '#5eead4';
+                setTimeout(() => { if (account) account.classList.remove('copied'); hint.textContent = currentMethod === 'BEP20' ? 'Send USDT only over the BEP20 (BNB Smart Chain) network.' : 'Click the address above to copy the payment destination.'; hint.style.color = ''; }, 1800);
+                showToast('✅ Payment destination copied', 'success');
+            };
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(value).then(done).catch(() => paymentCopyFallback(value, done));
+            } else paymentCopyFallback(value, done);
+        }
+
+        function paymentCopyFallback(value, done) {
+            const area = document.createElement('textarea');
+            area.value = value; area.style.position = 'fixed'; area.style.opacity = '0';
+            document.body.appendChild(area); area.select();
+            try {
+                if (document.execCommand('copy')) done();
+                else showToast('⚠️ Could not copy the destination', 'error');
+            } catch (e) { showToast('⚠️ Could not copy the destination', 'error'); }
+            area.remove();
+        }
+
+        async function submitUnifiedPayment() {
+            const amount = parseFloat(document.getElementById('paymentAmount').value);
+            let tx = document.getElementById('paymentTrx').value.trim();
+            const btn = document.getElementById('paymentSubmit');
+
+            if (!isFinite(amount) || amount <= 0) {
+                paymentSetMessage('Please enter a valid payment amount.');
+                showToast('❌ Enter a valid amount', 'error');
+                return;
+            }
+            if (currentMethod === 'BEP20' && (amount < BEP20_MIN || amount > BEP20_MAX)) {
+                paymentSetMessage('BEP20 deposits must be between ' + BEP20_MIN.toFixed(2) + ' and ' + BEP20_MAX.toLocaleString() + ' USDT.');
+                showToast('❌ Invalid BEP20 amount', 'error');
+                return;
+            }
+            if (!tx) {
+                paymentSetMessage('Please enter your ' + paymentTrxReceiptLabel(currentMethod) + '.');
+                showToast('❌ Enter the Transaction ID', 'error');
+                return;
+            }
+            if (currentMethod === 'BEP20') {
+                tx = bepNormHash(tx);
+                document.getElementById('paymentTrx').value = tx;
+                if (!bepHashValid(tx)) {
+                    paymentSetMessage('A BEP20 Transaction ID must start with 0x and contain 64 hexadecimal characters.');
+                    showToast('❌ Invalid BEP20 Transaction ID', 'error');
+                    return;
+                }
+            }
+
+            currentAmount = String(amount);
+            currentUSD = (currentMethod === 'bKash' || currentMethod === 'Nagad' || currentMethod === 'Rocket')
+                ? (amount / exchangeRate).toFixed(2)
+                : (amount * (currentMethod === 'BEP20' ? BEP20_RATE : 1)).toFixed(2);
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-pulse"></i> Processing...';
+            btn.disabled = true;
+            paymentSetMessage('');
+
+            const userEmail = localStorage.getItem('userEmail') || 'guest@sohagbd.top';
+            const userName = localStorage.getItem('userSessionName') || 'User';
+            const userTelegramId = localStorage.getItem('userTelegramId') || '';
+            const unit = paymentUnit(currentMethod);
+            const amountLabel = amount.toFixed(2) + ' ' + unit;
+
+            try {
+                const response = await fetch('api_save_deposit.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        method: currentMethod,
+                        amount: amountLabel,
+                        usdAmount: currentUSD,
+                        trx: tx,
+                        userEmail,
+                        userName,
+                        userTelegramId
+                    })
+                });
+                const data = await response.json();
+                if (!data.ok) {
+                    paymentSetMessage(data.message || 'Unable to submit the payment.');
+                    showToast(data.message || 'Payment submission failed', 'error');
+                    btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Payment';
+                    btn.disabled = false;
+                    return;
+                }
+
+                const stamp = data.created_at || new Date().toISOString().replace('T', ' ').slice(0, 19);
+                paymentReceiptData = {
+                    method: currentMethod,
+                    amount: amountLabel,
+                    usdAmount: currentUSD,
+                    transactionLabel: paymentTrxReceiptLabel(currentMethod),
+                    transactionId: data.trxid || tx,
+                    dateTime: stamp,
+                    status: data.status || 'Pending',
+                    receiptId: data.id || ''
+                };
+                document.getElementById('paymentReceiptAmount').textContent = amountLabel;
+                document.getElementById('paymentReceiptMethod').textContent = currentMethod;
+                document.getElementById('paymentReceiptTrxLabel').textContent = paymentReceiptData.transactionLabel;
+                document.getElementById('paymentReceiptTrx').textContent = paymentReceiptData.transactionId;
+                document.getElementById('paymentReceiptDate').textContent = paymentReceiptData.dateTime;
+                document.getElementById('paymentReceiptStatus').textContent = paymentReceiptData.status === 'Successful' ? 'Payment successful' : 'Pending verification';
+                document.getElementById('paymentReceiptStatusValue').textContent = paymentReceiptData.status;
+                document.getElementById('paymentFormView').style.display = 'none';
+                document.getElementById('paymentReceiptView').hidden = false;
+                downloadPaymentReceipt();
+                showToast('✅ Payment submitted. PDF receipt downloaded.', 'success');
+            } catch (e) {
+                paymentSetMessage('Server connection failed. Please try again.');
+                showToast('⚠️ Server connection failed', 'error');
+                btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Payment';
+                btn.disabled = false;
+            }
+        }
+
+        function setupPaymentInputValidation() {
+            const input = document.getElementById('paymentTrx');
+            if (!input) return;
+            input.addEventListener('input', function () {
+                this.value = this.value.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 100);
+            });
+            input.addEventListener('keydown', function (event) {
+                if (event.key === 'Enter') { event.preventDefault(); submitUnifiedPayment(); }
+            });
+        }
+
+        function submitDepositFlow() {
+            // Kept as a compatibility alias for any older inline references.
+            submitUnifiedPayment();
+        }
+
+        /* Small dependency-free PDF writer for a consistent downloadable receipt. */
+        function pdfEscape(value) {
+            return String(value == null ? '' : value)
+                .replace(/[^\x20-\x7E]/g, '?')
+                .replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+        }
+
+        function receiptPdfBlob(receipt) {
+            const lines = [
+                ['SOHAG BD SHOP', 22, '#title'],
+                ['PAYMENT RECEIPT', 15, '#heading'],
+                ['Generated receipt for your records', 10, '#muted'],
+                ['Payment method', 11, receipt.method],
+                ['Amount paid', 11, receipt.amount],
+                [receipt.transactionLabel || paymentTrxReceiptLabel(receipt.method), 11, receipt.transactionId],
+                ['Date & time', 11, receipt.dateTime],
+                ['Payment status', 11, receipt.status]
+            ];
+            if (receipt.recipient) lines.push(['Recipient', 11, receipt.recipient]);
+            if (receipt.receiptId) lines.push(['Receipt reference', 11, receipt.receiptId]);
+
+            const stream = [];
+            stream.push('q 0.00 0.72 0.78 rg 54 730 484 3 re f Q');
+            stream.push('BT');
+            stream.push('/F1 22 Tf 54 772 Td (' + pdfEscape(lines[0][0]) + ') Tj');
+            stream.push('/F1 15 Tf 0 -34 Td (' + pdfEscape(lines[1][0]) + ') Tj');
+            stream.push('/F1 10 Tf 0 -23 Td (' + pdfEscape(lines[2][0]) + ') Tj');
+            stream.push('/F1 11 Tf');
+            let y = -42;
+            for (let i = 3; i < lines.length; i++) {
+                const label = lines[i][0];
+                const rawValue = String(lines[i][2] == null ? '' : lines[i][2]);
+                const chunks = rawValue.match(/.{1,62}/g) || [''];
+                stream.push(y + ' Td (' + pdfEscape(label + ':') + ') Tj');
+                stream.push('0 -16 Td (' + pdfEscape(chunks[0]) + ') Tj');
+                for (let j = 1; j < chunks.length; j++) stream.push('0 -14 Td (' + pdfEscape(chunks[j]) + ') Tj');
+                y = -28;
+            }
+            stream.push('ET');
+            stream.push('q 0.86 0.88 0.92 RG 54 84 484 1 re f Q');
+            stream.push('BT /F1 9 Tf 54 66 Td (Keep this receipt until your payment is verified.) Tj ET');
+            const content = stream.join('\n');
+            const objects = [
+                '<< /Type /Catalog /Pages 2 0 R >>',
+                '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+                '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+                '<< /Length ' + content.length + ' >>\nstream\n' + content + '\nendstream',
+                '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'
+            ];
+            const encoder = new TextEncoder();
+            let pdf = '%PDF-1.4\n';
+            const offsets = [0];
+            objects.forEach((object, index) => {
+                offsets[index + 1] = encoder.encode(pdf).length;
+                pdf += (index + 1) + ' 0 obj\n' + object + '\nendobj\n';
+            });
+            const xrefOffset = encoder.encode(pdf).length;
+            pdf += 'xref\n0 ' + (objects.length + 1) + '\n';
+            pdf += '0000000000 65535 f \n';
+            offsets.slice(1).forEach(offset => { pdf += String(offset).padStart(10, '0') + ' 00000 n \n'; });
+            pdf += 'trailer\n<< /Size ' + (objects.length + 1) + ' /Root 1 0 R >>\nstartxref\n' + xrefOffset + '\n%%EOF';
+            return new Blob([encoder.encode(pdf)], { type: 'application/pdf' });
+        }
+
+        function downloadReceiptPdf(receipt, filename) {
+            if (!receipt) return;
+            const url = URL.createObjectURL(receiptPdfBlob(receipt));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = (filename || 'sohag-bd-payment-receipt') + '.pdf';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+
+        function downloadPaymentReceipt() {
+            if (!paymentReceiptData) return;
+            downloadReceiptPdf(paymentReceiptData, 'sohag-bd-' + paymentReceiptData.method.toLowerCase() + '-receipt');
+        }
+
+        function downloadFundTransferReceipt() {
+            if (!FT.receipt) return;
+            downloadReceiptPdf(FT.receipt, 'sohag-bd-fund-transfer-receipt');
+        }
+
+        /* ==================================================================
+           🟢 BEP20 (USDT · BNB Smart Chain) — helper functions
+           ------------------------------------------------------------------
+           BEP20 now runs in exactly the same 3-step popup flow as bKash/Nagad/Rocket
+           (openAmountModal → nextToInstruction → nextToTrxInput → submit)।
+           The functions below only handle the extra BEP20 work: showing and copying the
+           address, and validating the transaction hash.
+           ================================================================== */
+        function bepEl(id) { return document.getElementById(id); }
+
+        /** The small box below the TxID input. state: 'ok' | 'bad' | '' */
+        function bepShowCheck(state, html) {
+            const box = bepEl('trxCheck');
+            if (!box) return;
+            if (!state) { box.className = 'bep-check'; box.innerHTML = ''; return; }
+            const icon = state === 'ok'
+                ? '<i class="fa-solid fa-circle-check"></i>'
+                : '<i class="fa-solid fa-circle-exclamation"></i>';
+            box.className = 'bep-check show bep-check-' + state;
+            box.innerHTML = icon + '<span>' + html + '</span>';
+        }
+
+        /** Shows how much of the hash has been typed so far */
+        function bepLiveCheck() {
+            const box = bepEl('trxId');
+            if (!box) return;
+            const norm = bepNormHash(box.value);
+            const body = norm.replace(/^0x/, '');
+            if (body.length === 0) { bepShowCheck('', ''); return; }
+            if (bepHashValid(norm)) {
+                bepShowCheck('ok', 'Looks like a valid BEP20 transaction hash.');
+            } else {
+                bepShowCheck('bad', 'A BEP20 TxID is <b>0x</b> followed by 64 characters · ' +
+                                    body.length + '/64 entered.');
+            }
+        }
+
+        /**
+         * Hash normalisation: drops spaces, lowercases, keeps only hex characters,
+         * and if someone pastes 64 characters without 0x it adds the 0x prefix itself.
+         * (Lowercasing prevents the same hash from being submitted twice in two different cases —
+         *  the duplicate check is an exact string comparison.)
+         */
+        function bepNormHash(raw) {
+            let s = String(raw == null ? '' : raw).trim().toLowerCase().replace(/\s+/g, '');
+            const hadPrefix = s.slice(0, 2) === '0x';
+            let body = (hadPrefix ? s.slice(2) : s).replace(/[^0-9a-f]/g, '');
+            if (body.length > 64) body = body.slice(0, 64);
+            if (hadPrefix || body.length === 64) return '0x' + body;
+            return body;
+        }
+
+        function bepHashValid(h) { return /^0x[0-9a-f]{64}$/.test(h); }
+
+        /** Fills the address into the Step 2 popup (keeps it disabled when not configured) */
+        function bepInit() {
+            const ok = bepAddressValid();
+            const addrEl = bepEl('bepAddrText');
+            if (addrEl) addrEl.innerText = ok ? BEP20_ADDRESS : '—';
+            const notSet = bepEl('bepNotSet');
+            const body   = bepEl('bepAddrBody');
+            if (notSet) notSet.style.display = ok ? 'none' : 'flex';
+            if (body)   body.style.display   = ok ? 'block' : 'none';
+            // If no address is configured, moving to the next step is blocked too
+            const next = bepEl('instrNextBtn');
+            if (next) next.disabled = !ok;
+            const amt = bepEl('usdtInput');
+            if (amt) amt.setAttribute('min', String(BEP20_MIN));
+        }
+
+        async function copyBepAddress() {
+            if (!bepAddressValid()) return;
+            const hint = bepEl('bepAddrHint');
+            let done = false;
+            try {
+                await navigator.clipboard.writeText(BEP20_ADDRESS);
+                done = true;
+            } catch (e) {
+                // On http or older browsers the clipboard API is missing — legacy fallback
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = BEP20_ADDRESS;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    done = document.execCommand('copy');
+                    ta.remove();
+                } catch (e2) { done = false; }
+            }
+            if (hint) {
+                hint.innerHTML = done ? '✅ Address copied!' : '⚠️ Copy failed — please select and copy manually.';
+                hint.style.color = done ? '#5eead4' : '#ffb199';
+                setTimeout(() => {
+                    hint.innerHTML = 'Tap the address above to copy it';
+                    hint.style.color = '#94a3b8';
+                }, 2600);
+            }
+            showToast(done ? '✅ BEP20 address copied!' : '⚠️ Could not copy the address', done ? 'success' : 'error');
+        }
+
+        /* ==================================================================
+           💸 Fund Transfer
+           ------------------------------------------------------------------
+           The Server decides who is sending from the session cookie itself — passing a
+           telegram_id from here cannot touch the Wallet of another user.
+
+           💡 Who the fee is charged to (updated):
+              Exactly the Amount entered is deducted from the sender Balance —
+              not a cent more. The fee is taken out of that Amount itself,
+              so the recipient receives  (Amount − fee).
+              Example: sending $1.00 costs the sender $1.00, the fee is $0.02,
+                      and the recipient receives $0.98.
+           ================================================================== */
+        const FT_API = 'api_fund_transfer.php';
+
+        const FT = {
+            fee: 0.02,             // Fee for the smallest Amount (comes from the Server)
+            feePerBlock: 0.02,     // Fee per block
+            feeBlock: 1.00,        // Size of one block
+            min: 0.03, max: 5000,  // min = the lowest Amount where the recipient still gets something after the fee
+            minCredit: 0.01,       // The recipient must receive at least this much
+            balance: 0, maxSendable: 0,
+            lookupTimer: null,     // Used to run the check after typing stops
+            lookupSeq: 0,          // Stops an old response from overwriting a newer one
+            checkedId: '',         // The ID that has already been verified
+            checkedName: '',
+            ok: false,             // Whether the recipient is valid
+            busy: false,
+            receipt: null
+        };
+
+        function ftEl(id) { return document.getElementById(id); }
+
+        function ftEsc(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function ftMoney(n) {
+            let v = parseFloat(n);
+            if (!isFinite(v)) v = 0;
+            return '$' + v.toFixed(2);
+        }
+
+        function ftSetMsg(text, kind) {
+            const el = ftEl('ftMsg');
+            if (!el) return;
+            el.className = 'ft-msg' + (kind ? ' ' + kind : '');
+            el.innerHTML = text || '';
+        }
+
+        /**
+         * Exactly the same tiered calculation as ft_fee_cents() on the Server, but in the browser —
+         * purely for preview. The real fee is recalculated by the Server, so the value
+         * here is never trusted.  fee = ceil(amount / block) * perBlock
+         */
+        function ftFeeFor(amount) {
+            const cents = Math.round((parseFloat(amount) || 0) * 100);
+            if (cents <= 0) return 0;
+            const block = Math.max(1, Math.round(FT.feeBlock * 100));
+            const per   = Math.round(FT.feePerBlock * 100);
+            return (Math.ceil(cents / block) * per) / 100;
+        }
+
+        /** What the recipient actually receives after the fee is deducted */
+        function ftNetFor(amount) {
+            const amt = parseFloat(amount) || 0;
+            if (amt <= 0) return 0;
+            return Math.max(0, Math.round((amt - ftFeeFor(amt)) * 100) / 100);
+        }
+
+        /** ফি-র সংখ্যাটা ব্যানারের ব্যাজে বসায় (মোডালের ভেতরের ডেসক্রিপশনটা
+            জায়গা বাঁচাতে তুলে দেওয়া হয়েছে — ফি এখন সামারি সারিতেই দেখা যায়) */
+        function ftSyncFee() {
+            const txt = FT.fee.toFixed(2);
+            const el = ftEl('ftBannerFee');
+            if (el) el.innerText = txt;
+        }
+
+        /** Header Wallet and modal Balance — updated together */
+        function ftPaintBalance() {
+            const b = ftEl('ftBalance');
+            if (b) b.innerText = ftMoney(FT.balance);
+            const w = ftEl('walletDisplay');
+            if (w) w.innerHTML = ftMoney(FT.balance);
+        }
+
+        /** Renders the small recipient check box. state: 'ok' | 'bad' | 'wait' | '' */
+        function ftShowCheck(state, html) {
+            const box = ftEl('ftCheck');
+            if (!box) return;
+            if (!state) { box.className = 'ft-check'; box.innerHTML = ''; return; }
+            const icon = state === 'ok'   ? '<i class="fa-solid fa-circle-check"></i>'
+                       : state === 'bad'  ? '<i class="fa-solid fa-circle-exclamation"></i>'
+                       : '<div class="mini-spin"></div>';
+            box.className = 'ft-check show ft-check-' + state;
+            box.innerHTML = icon + '<span>' + html + '</span>';
+        }
+
+        /** Session expired — send the user back to Login (OTP will be needed again)
+         *
+         *  ⚠️ Previously a single 401 was enough to wipe  isLoggedIn  and jump to
+         *     login.html. But one 401 can also come from a momentary server/network
+         *     hiccup — and the user was thrown out mid-transfer for nothing, having to
+         *     fetch a fresh code from the bot even though the 30-day session was alive.
+         *
+         *  ✅ Now the server is asked separately whether the session is really gone.
+         *     Only if it plainly answers "logged_in: false" does the logout happen.
+         *     If the server cannot be reached, nothing is deleted and the user stays.
+         */
+        let ftReloginBusy = false;
+
+        async function ftRelogin(message) {
+            if (ftReloginBusy) return;
+            ftReloginBusy = true;
+
+            let alive = false, known = false;
+            for (let i = 0; i < 2; i++) {
+                if (i) await new Promise(r => setTimeout(r, 900));
+                try {
+                    const s = await (await fetch('api_user_login.php?action=session',
+                                                 { credentials: 'same-origin' })).json();
+                    // ⚠️ Only a real true/false counts as an answer. Anything else
+                    //    (an error object, a half-broken reply) means "don't know".
+                    if (s && typeof s.logged_in === 'boolean') {
+                        known = true;                // stays true once a clear answer arrives
+                        if (s.logged_in) { alive = true; break; }
+                    }
+                } catch (e) { /* unreachable — `known` keeps whatever it already was */ }
+            }
+
+            if (alive || !known) {
+                // The login is fine (or the server is unreachable) — do not throw the user out
+                ftSetMsg('⚠️ ' + ftEsc('The server did not respond just now. Please try again.'), 'err');
+                showToast('⚠️ Please try again', 'error');
+                ftReloginBusy = false;
+                return;
+            }
+
+            ftSetMsg('🔒 ' + ftEsc(message || 'Session expired. Please log in again.'), 'err');
+            showToast('🔒 Please log in again', 'error');
+            try { localStorage.removeItem('isLoggedIn'); } catch (e) {}
+            setTimeout(() => { window.location.replace('login.html'); }, 1800);
+        }
+
+        async function ftApi(action, payload) {
+            const isGet = (action === 'info' || action === 'history');
+            const opt = {
+                method: isGet ? 'GET' : 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' }
+            };
+            let url = FT_API + '?action=' + encodeURIComponent(action);
+            if (!isGet) {
+                opt.body = JSON.stringify(Object.assign({ action: action }, payload || {}));
+            }
+            const res  = await fetch(url, opt);
+            let data = null;
+            try { data = await res.json(); } catch (e) { data = null; }
+            if (!data) data = { success: false, message: 'Server did not respond correctly.' };
+            data._status = res.status;
+            return data;
+        }
+
+        /**
+         * Renders the summary box.
+         * Exactly `amt` is deducted from the sender, and the recipient receives `amt − fee`.
+         */
+        function ftRecalc() {
+            const raw = parseFloat(ftEl('ftAmount').value);
+            const amt = isFinite(raw) && raw > 0 ? raw : 0;
+            const fee = amt > 0 ? ftFeeFor(amt) : ftFeeFor(FT.min);
+            const net = ftNetFor(amt);
+
+            ftEl('ftSumAmount').innerText = ftMoney(amt);
+            ftEl('ftSumFee').innerText    = '− ' + ftMoney(fee);
+            const netEl = ftEl('ftSumNet');
+            if (netEl) netEl.innerText    = ftMoney(net);
+            ftEl('ftSumTotal').innerText  = ftMoney(amt);
+        }
+
+        function ftResetForm() {
+            FT.checkedId = ''; FT.checkedName = ''; FT.ok = false; FT.busy = false;
+            FT.receipt = null;
+            FT.lookupSeq++;
+            if (FT.lookupTimer) { clearTimeout(FT.lookupTimer); FT.lookupTimer = null; }
+            ftEl('ftRecipient').value = '';
+            ftEl('ftAmount').value = '';
+            ftEl('ftRecipient').disabled = false;
+            ftEl('ftAmount').disabled = false;
+            ftShowCheck('', '');
+            ftSetMsg('', '');
+            ftRecalc();
+            const btn = ftEl('ftSubmit');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send Funds';
+            ftEl('ftForm').style.display = 'block';
+            ftEl('ftReceipt').classList.remove('show');
+            // রিসিট দেখার পর বাক্সটা নিচে স্ক্রল হয়ে থাকতে পারে — উপরে ফেরানো হলো
+            const sc = document.querySelector('#transferModal .ft-scroll');
+            if (sc) sc.scrollTop = 0;
+        }
+
+        function openTransferModal() {
+            if (window.userIsBlocked) {
+                showToast('⛔ Your account is restricted! Transfers are disabled.', 'error');
+                return;
+            }
+            ftResetForm();
+            ftSyncFee();
+            ftPaintBalance();
+            ftEl('transferModal').style.display = 'flex';
+            ftLoadInfo();
+            setTimeout(() => { try { ftEl('ftRecipient').focus(); } catch (e) {} }, 150);
+        }
+
+        function closeTransferModal() {
+            ftEl('transferModal').style.display = 'none';
+            if (FT.lookupTimer) { clearTimeout(FT.lookupTimer); FT.lookupTimer = null; }
+        }
+
+        /** Fee/limits/Balance come from the Server — not hardcoded values */
+        async function ftLoadInfo() {
+            try {
+                const d = await ftApi('info');
+                if (d._status === 401 || d.reason === 'auth' || d.relogin) { ftRelogin(d.message); return; }
+                if (!d.success) { ftSetMsg('⚠️ ' + ftEsc(d.message || 'Could not load your wallet.'), 'err'); return; }
+
+                FT.fee         = parseFloat(d.fee) || 0.02;
+                FT.feePerBlock = parseFloat(d.fee_per_block) || 0.02;
+                FT.feeBlock    = parseFloat(d.fee_block) || 1.00;
+                FT.min         = parseFloat(d.min) || 0.03;
+                FT.max         = parseFloat(d.max) || 5000;
+                FT.minCredit   = parseFloat(d.min_credit) || 0.01;
+                FT.balance     = parseFloat(d.balance) || 0;
+                FT.maxSendable = parseFloat(d.max_sendable) || 0;
+
+                ftSyncFee();
+                ftPaintBalance();
+                ftEl('ftAmount').setAttribute('min', FT.min.toFixed(2));
+                ftRecalc();
+
+                if (d.blocked) {
+                    ftSetMsg('⛔ Your account is restricted. Transfers are disabled.', 'err');
+                    ftEl('ftSubmit').disabled = true;
+                } else if (!d.can_send) {
+                    ftSetMsg('💡 You need at least ' + ftMoney(FT.min) +
+                             ' in your wallet to make a transfer.', 'err');
+                }
+            } catch (e) {
+                ftSetMsg('⚠️ Network error. Please check your connection.', 'err');
+            }
+        }
+
+        /** On typing in the input — keep digits only, then after a short pause check with the Server */
+        function ftOnRecipientInput() {
+            const box = ftEl('ftRecipient');
+            const cleaned = box.value.replace(/[^0-9]/g, '');
+            if (cleaned !== box.value) box.value = cleaned;
+
+            FT.ok = false; FT.checkedId = ''; FT.checkedName = '';
+            ftSetMsg('', '');
+            if (FT.lookupTimer) clearTimeout(FT.lookupTimer);
+
+            if (cleaned.length === 0) { ftShowCheck('', ''); return; }
+            if (cleaned.length < 5) {
+                ftShowCheck('wait', 'Keep typing the full User ID…');
+                return;
+            }
+            ftShowCheck('wait', 'Checking account…');
+            FT.lookupTimer = setTimeout(() => ftLookup(cleaned), 550);
+        }
+
+        /** 🔎 Whether the recipient exists — if not, show 'Account not found' right away */
+        async function ftLookup(id) {
+            const seq = ++FT.lookupSeq;
+            try {
+                const d = await ftApi('lookup', { recipient_id: id });
+                if (seq !== FT.lookupSeq) return;                       // the User has typed again in the meantime
+                if (ftEl('ftRecipient').value !== id) return;
+
+                if (d._status === 401 || d.reason === 'auth' || d.relogin) { ftRelogin(d.message); return; }
+
+                if (d.success && d.found) {
+                    FT.ok = true; FT.checkedId = id; FT.checkedName = d.name || ('User ' + id);
+                    ftShowCheck('ok', 'Account found · <b>' + ftEsc(FT.checkedName) + '</b>' +
+                                      (d.username ? ' <span style="opacity:.75">@' + ftEsc(d.username) + '</span>' : ''));
+                    return;
+                }
+
+                FT.ok = false;
+                const msg = d.message || 'Account not found';
+                ftShowCheck('bad', ftEsc(msg));
+                if (d.reason === 'not_found') showToast('❌ Account not found', 'error');
+                const box = ftEl('ftRecipient');
+                box.classList.remove('ft-shake');
+                void box.offsetWidth;
+                box.classList.add('ft-shake');
+            } catch (e) {
+                if (seq !== FT.lookupSeq) return;
+                ftShowCheck('bad', 'Could not verify the account. Check your connection.');
+            }
+        }
+
+        async function submitTransfer() {
+            if (FT.busy) return;
+
+            const rid = ftEl('ftRecipient').value.replace(/[^0-9]/g, '');
+            const amt = parseFloat(ftEl('ftAmount').value);
+            const btn = ftEl('ftSubmit');
+
+            // ---- Client-side checks (the same checks run again on the Server) ----
+            if (!rid) {
+                ftShowCheck('bad', 'Please enter the recipient User ID.');
+                showToast('❌ Enter the recipient User ID', 'error');
+                return;
+            }
+            if (!FT.ok || FT.checkedId !== rid) {
+                ftShowCheck('wait', 'Verifying account…');
+                await ftLookup(rid);
+                if (!FT.ok) { showToast('❌ Account not found', 'error'); return; }
+            }
+            if (!isFinite(amt) || amt <= 0) {
+                ftSetMsg('❌ Please enter a valid amount.', 'err');
+                showToast('❌ Enter a valid amount', 'error');
+                return;
+            }
+            if (amt < FT.min) {
+                ftSetMsg('❌ Minimum transfer amount is ' + ftMoney(FT.min) +
+                         ' — the fee comes out of the amount, so anything smaller would ' +
+                         'leave the recipient with nothing.', 'err');
+                return;
+            }
+            if (amt > FT.max) {
+                ftSetMsg('❌ Maximum transfer amount is ' + ftMoney(FT.max) + ' per transaction.', 'err');
+                return;
+            }
+            if (ftNetFor(amt) < FT.minCredit - 0.0001) {
+                ftSetMsg('❌ After the ' + ftMoney(ftFeeFor(amt)) +
+                         ' fee the recipient would receive nothing. Please send a bit more.', 'err');
+                return;
+            }
+            // The fee is not charged separately to the sender — so only amt is needed in the Balance
+            if (amt > FT.balance + 0.0001) {
+                ftSetMsg('❌ Insufficient balance. You need ' + ftMoney(amt) +
+                         ' but have ' + ftMoney(FT.balance) + '.', 'err');
+                showToast('❌ Insufficient balance', 'error');
+                return;
+            }
+
+            FT.busy = true;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-pulse"></i> Sending…';
+            ftEl('ftRecipient').disabled = true;
+            ftEl('ftAmount').disabled = true;
+            ftSetMsg('⏳ Processing your transfer…', '');
+
+            try {
+                const d = await ftApi('transfer', { recipient_id: rid, amount: amt.toFixed(2) });
+
+                if (d._status === 401 || d.reason === 'auth' || d.relogin) { ftRelogin(d.message); return; }
+
+                if (d.success) {
+                    // The Server calculation is final. If net is not returned, fall back to amount − fee.
+                    const sent = parseFloat(d.amount) || 0;
+                    const fee  = parseFloat(d.fee)    || 0;
+                    const net  = (d.net !== undefined && d.net !== null)
+                                    ? (parseFloat(d.net) || 0)
+                                    : Math.max(0, Math.round((sent - fee) * 100) / 100);
+
+                    FT.balance = parseFloat(d.balance) || 0;
+                    ftEl('ftRcAmount').innerText = ftMoney(sent);
+                    ftEl('ftRcName').innerText   = d.to_name || ('User ' + rid);
+                    ftEl('ftRcId').innerText     = d.id || '-';
+                    ftEl('ftRcTo').innerText     = d.to_id || rid;
+                    const sentEl = ftEl('ftRcSent');
+                    if (sentEl) sentEl.innerText = ftMoney(sent);
+                    ftEl('ftRcFee').innerText    = '− ' + ftMoney(fee);
+                    const netEl2 = ftEl('ftRcNet');
+                    if (netEl2) netEl2.innerText = ftMoney(net);
+                    ftEl('ftRcBal').innerText    = ftMoney(d.balance);
+
+                    FT.receipt = {
+                        method: 'Fund Transfer',
+                        amount: ftMoney(sent),
+                        transactionLabel: 'Transfer ID',
+                        transactionId: d.id || '-',
+                        dateTime: d.date || new Date().toISOString().replace('T', ' ').slice(0, 19),
+                        status: 'Successful',
+                        recipient: (d.to_name || ('User ' + rid)) + ' (' + (d.to_id || rid) + ')'
+                    };
+
+                    ftEl('ftForm').style.display = 'none';
+                    ftEl('ftReceipt').classList.add('show');
+                    // রিসিটের উপর থেকেই দেখা শুরু হোক
+                    const sc = document.querySelector('#transferModal .ft-scroll');
+                    if (sc) sc.scrollTop = 0;
+
+                    ftPaintBalance();
+                    downloadFundTransferReceipt();
+                    showToast('✅ ' + ftMoney(sent) + ' sent · recipient received ' +
+                              ftMoney(net) + ' · PDF receipt downloaded', 'success');
+                    return;
+                }
+
+                // ---- Failed ----
+                ftSetMsg('❌ ' + ftEsc(d.message || 'Transfer failed. Please try again.'), 'err');
+                if (d.reason === 'not_found') {
+                    FT.ok = false;
+                    ftShowCheck('bad', 'Account not found');
+                    showToast('❌ Account not found', 'error');
+                } else if (d.reason === 'insufficient') {
+                    if (d.balance !== undefined) {
+                        FT.balance = parseFloat(d.balance) || 0;
+                        ftPaintBalance();
+                    }
+                    showToast('❌ Insufficient balance', 'error');
+                } else {
+                    showToast('❌ Transfer failed', 'error');
+                }
+            } catch (e) {
+                ftSetMsg('⚠️ Network error. Your balance was not changed — please try again.', 'err');
+                showToast('⚠️ Connection failed', 'error');
+            } finally {
+                FT.busy = false;
+                if (ftEl('ftForm').style.display !== 'none') {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send Funds';
+                    ftEl('ftRecipient').disabled = false;
+                    ftEl('ftAmount').disabled = false;
+                }
+            }
+        }
+
+        
+        function updateNotificationBadge() {
+            let badges = document.querySelectorAll('.notif-badge');
+            badges.forEach(b => b.style.display = 'none');
+        }
+        // This function only hides the badge — it never shows anything again.
+        // So there is no need to run it every 3 seconds, once is enough.
+        updateNotificationBadge();
+        
+        window.onclick = function(event) {
+            // Clicking on the empty area (backdrop) will close the modal
+            if (event.target === document.getElementById('supportModal')) {
+                closeSupportModal();
+            }
+            if (event.target === document.getElementById('paymentModal')) {
+                closePaymentModal();
+            }
+            // Cannot be closed while a transfer is in progress — otherwise the user would think the action did not go through
+            if (event.target === document.getElementById('transferModal') && !FT.busy) {
+                closeTransferModal();
+            }
+        }
+    </script>
+</body>
+</html>

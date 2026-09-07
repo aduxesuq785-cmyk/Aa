@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>My Account - SOHAG BD SHOP</title>
+    <!-- Favicon / App icons -->
+    <link rel="icon" href="/favicon.ico?v=2" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=2">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=2">
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png?v=2">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=2">
+    <link rel="manifest" href="/site.webmanifest?v=2">
+    <meta name="theme-color" content="#0f111a">
+    <!-- ⚡ Font Awesome non-blocking: the page paints immediately even if cdnjs is slow or blocked.
+         (previously this one line was the root cause of the "blank screen after login, fine after reload" problem) -->
+    <!-- ⚡ media="print" dropped: it does keep the page from blocking, but the browser also
+         gives a print stylesheet the *lowest* download priority, so the icons arrived last
+         of all and popped in late. preload + onload swap is non-blocking AND high priority. -->
+    <link rel="preload" as="style" href="fa-subset.css?v=3"
+          onload="this.rel='stylesheet'; this.onload=null;">
+    <!-- The icon font itself, fetched in parallel with the CSS instead of after it -->
+    <link rel="preload" as="font" type="font/woff2" crossorigin
+          href="fa-solid-900.woff2">
+    <noscript><link rel="stylesheet" href="fa-subset.css?v=3"></noscript>
+    <!-- 🚀 Shared page boot helper — the full reasoning is written out in app-boot.js -->
+    <script src="app-boot.js?v=4"></script>
+    <script>
+        // 🔐 Login guard. Previously it was only  window.location.href = 'login.html'  —
+        //    that does not stop the script, so all the code below kept running even while
+        //    logged out, and the errors left the page blank.
+        //    SBD.requireLogin() calls location.replace() and stops the remaining SBD.ready()
+        //    steps from running.
+        if (window.SBD) { SBD.requireLogin(); }
+        else if (localStorage.getItem('isLoggedIn') !== 'true') { window.location.replace('login.html'); }
+    </script>
+    <style>
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #090910 0%, #171124 50%, #0d1321 100%); color: #e2e8f0; min-height: 100vh; overflow-x: hidden; padding-bottom: 110px; }
+        
+        .header { background: rgba(23, 17, 36, 0.85); backdrop-filter: blur(12px); padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid rgba(0, 242, 254, 0.3); position: sticky; top: 0; z-index: 1000; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        .header-left { display: flex; align-items: center; gap: 15px; }
+        .header-back-btn { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(0, 242, 254, 0.4); color: #00f2fe; padding: 8px 12px; border-radius: 10px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.3s; }
+        .header-back-btn:hover { background: rgba(0, 242, 254, 0.15); transform: translateX(-2px); }
+        .logo-container { display: flex; align-items: center; gap: 8px; }
+        .logo-icon { font-size: 24px; background: linear-gradient(135deg, #00f2fe, #4facfe); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .header h1 { margin: 0; font-size: 22px; font-weight: 900; background: linear-gradient(90deg, #00f2fe 0%, #4facfe 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: 1px; }
+
+        .container { padding: 20px; max-width: 600px; margin: 0 auto; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .banned-banner {
+            background: linear-gradient(90deg, #ff0844, #ffb199);
+            color: #fff;
+            text-align: center;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 12px;
+            font-weight: bold;
+            font-size: 14px;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 0.8; }
+            50% { opacity: 1; }
+            100% { opacity: 0.8; }
+        }
+        .banned-banner i { margin-right: 8px; }
+        
+        .profile-header { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(0, 242, 254, 0.2); border-radius: 20px; padding: 30px 20px; text-align: center; margin-bottom: 20px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); }
+        .avatar { width: 80px; height: 80px; background: linear-gradient(45deg, #00f2fe, #4facfe); border-radius: 50%; margin: 0 auto 15px; display: flex; align-items: center; justify-content: center; font-size: 35px; font-weight: 900; color: #090910; box-shadow: 0 0 20px rgba(0, 242, 254, 0.5); overflow: hidden; }
+        .avatar img { width: 100%; height: 100%; object-fit: cover; }
+        
+        .name-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .profile-header h2 { margin: 0; font-size: 22px; color: #fff; }
+        .verified-badge {
+            background: #1DA1F2;
+            border-radius: 50%;
+            width: 22px;
+            height: 22px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: white;
+            box-shadow: 0 0 10px rgba(29, 161, 242, 0.5);
+        }
+        .profile-header p { margin: 5px 0 0 0; font-size: 14px; color: #00f2fe; font-weight: bold; letter-spacing: 1px; }
+        
+        .id-container {
+            margin-top: 12px;
+            padding-top: 8px;
+            border-top: 1px dashed rgba(0, 242, 254, 0.2);
+            display: inline-block;
+            width: auto;
+        }
+        .id-label {
+            font-size: 11px;
+            color: #64748b;
+            letter-spacing: 0.5px;
+        }
+        .id-value {
+            font-size: 13px;
+            color: #00f2fe;
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 4px 12px;
+            border-radius: 20px;
+            display: inline-block;
+            margin-left: 8px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .id-value:hover {
+            background: rgba(0, 242, 254, 0.2);
+            transform: scale(1.02);
+        }
+        
+        .info-card { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 15px; padding: 20px; margin-bottom: 20px; }
+        .info-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px dashed rgba(255,255,255,0.1); }
+        .info-row:last-child { border-bottom: none; }
+        .info-label { color: #94a3b8; font-size: 14px; font-weight: 600; }
+        .info-value { color: #fff; font-size: 14px; font-weight: bold; }
+        
+        .status-active { color: #00f2fe; }
+        .status-banned { color: #ff0844; font-weight: bold; }
+        
+        .deposit-btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            background: rgba(0, 242, 254, 0.1);
+            border: 1px solid #00f2fe;
+            color: #00f2fe;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-top: 15px;
+            font-weight: bold;
+            font-size: 14px;
+            font-family: inherit;
+            transition: 0.3s;
+        }
+        .deposit-btn:hover {
+            background: #00f2fe;
+            color: #090910;
+        }
+        .deposit-btn-disabled {
+            background: rgba(255, 8, 68, 0.1);
+            border-color: #ff0844;
+            color: #ff0844;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        /* After the Fund Transfer banner was removed, Add Funds and Secure Logout became
+           direct siblings side by side. A button is inline-block by default, so a stray
+           whitespace gap appeared between the two — display:block put a stop to
+           that, and the gap is now controlled only by margin-top (12px). */
+        .logout-btn { display: block; width: 100%; padding: 15px; background: rgba(255, 8, 68, 0.1); border: 1px solid #ff0844; color: #ff0844; font-weight: bold; border-radius: 12px; cursor: pointer; text-transform: uppercase; transition: 0.3s; font-size: 14px; font-family: inherit; letter-spacing: 1px; margin-top: 12px; }
+        .logout-btn:hover { background: #ff0844; color: #fff; box-shadow: 0 0 15px #ff0844; }
+
+        .balance-value { color: #34d399; font-family: monospace; font-size: 15px; }
+
+        .bottom-nav { position: fixed; bottom: 15px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 600px; background: rgba(15, 15, 20, 0.93); backdrop-filter: blur(12px); border: 1px solid rgba(0, 242, 254, 0.3); border-radius: 22px; padding: 12px 5px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6); z-index: 1000; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; color: #94a3b8; font-size: 11px; font-weight: bold; cursor: pointer; text-decoration: none; flex: 1; transition: 0.3s; }
+        .nav-item i { font-size: 20px; margin-bottom: 5px; }
+        .nav-item.active, .nav-item:hover { color: #00f2fe; text-shadow: 0 0 10px rgba(0, 242, 254, 0.8); }
+        .nav-disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        
+        .toast {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #00f2fe;
+            color: #090910;
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-weight: bold;
+            font-size: 13px;
+            z-index: 9999;
+            animation: fadeInUp 0.3s ease;
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+            to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+        
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(0,242,254,0.3);
+            border-top: 2px solid #00f2fe;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .support-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.9); backdrop-filter: blur(6px);
+            z-index: 2000; display: none; justify-content: center; align-items: center;
+        }
+        .support-box {
+            background: linear-gradient(145deg, #0f0f17, #0a0a10);
+            padding: 30px 25px; border-radius: 28px; width: 90%; max-width: 340px;
+            text-align: center; border: 1px solid rgba(0, 242, 254, 0.4);
+            position: relative;
+        }
+        .close-modal {
+            position: absolute; top: 15px; right: 20px; color: #ff0844; font-size: 22px;
+            cursor: pointer; width: 30px; height: 30px; display: flex;
+            align-items: center; justify-content: center; border-radius: 50%;
+            background: rgba(255, 8, 68, 0.1);
+        }
+        .close-modal:hover { background: #ff0844; color: #fff; transform: rotate(90deg); }
+        .support-box h3 { color: #fff; margin-bottom: 8px; font-size: 22px; }
+        .support-box h3 i { color: #00f2fe; margin-right: 8px; }
+        .support-desc { color: #94a3b8; font-size: 13px; margin-bottom: 25px; }
+        .support-btn {
+            display: flex; align-items: center; justify-content: center; gap: 12px;
+            padding: 14px; border-radius: 14px; font-weight: 700; font-size: 16px;
+            margin-top: 12px; text-decoration: none; transition: 0.3s;
+        }
+        .btn-wa { background: rgba(37, 211, 102, 0.12); border: 1px solid #25D366; color: #25D366; }
+        .btn-wa:hover { background: #25D366; color: #fff; }
+        .btn-tg { background: rgba(0, 136, 204, 0.12); border: 1px solid #0088cc; color: #0088cc; }
+        .btn-tg:hover { background: #0088cc; color: #fff; }
+    </style>
+
+    <!-- Animated theme (background colour animation + card animation) -->
+    <link rel="preload" as="style" href="user-theme.css?v=6">
+    <link rel="stylesheet" href="user-theme.css?v=6">
+</head>
+<body>
+
+    <div class="header">
+        <div class="header-left">
+            <button class="header-back-btn" onclick="window.location.href='index.html'"><i class="fa-solid fa-arrow-left"></i></button>
+            <div class="logo-container">
+                <i class="fas fa-cloud logo-icon"></i>
+                <h1>𝗦𝗢𝗛𝗔𝗚 𝗕𝗗 𝗦𝗛𝗢𝗣</h1>
+            </div>
+        </div>
+    </div>
+
+    <div class="container px-stagger">
+        <div id="bannedBanner" style="display: none;" class="banned-banner">
+            <i class="fa-solid fa-ban"></i> Your account has been banned! Please contact admin for support.
+        </div>
+
+        <div class="profile-header">
+            <div class="avatar" id="userAvatar">
+                <div class="loading-spinner"></div>
+            </div>
+            <div class="name-container">
+                <h2 id="userNameDisplay">Loading...</h2>
+                <span class="verified-badge" id="verifiedBadge">✓</span>
+            </div>
+            <p id="userIdDisplay">@loading</p>
+            
+            <div class="id-container">
+                <span class="id-label"><i class="fa-regular fa-id-card"></i> ID :</span>
+                <span class="id-value" id="chatIdDisplay" onclick="copyChatId()">-</span>
+            </div>
+        </div>
+
+        <div class="info-card">
+            <div class="info-row">
+                <span class="info-label"><i class="fa-brands fa-telegram"></i> Username</span>
+                <span class="info-value" id="contactValue">@loading</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label"><i class="fa-solid fa-wallet"></i> Wallet Balance</span>
+                <span class="info-value balance-value" id="walletBalance">$0.00</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label"><i class="fa-solid fa-circle-check"></i> Account Status</span>
+                <span class="info-value" id="accountStatus">
+                    <span class="status-active"><i class="fa-solid fa-circle-check"></i> Active & Verified</span>
+                </span>
+            </div>
+            <div class="info-row">
+                <span class="info-label"><i class="fa-solid fa-calendar"></i> Joined Date</span>
+                <span class="info-value" id="joinDate">-</span>
+            </div>
+        </div>
+
+        <button class="deposit-btn" id="depositBtn" onclick="checkAndRedirect('deposit.html')">
+            <i class="fa-solid fa-plus-circle"></i> Add Funds
+        </button>
+        <button class="logout-btn" onclick="logoutUser()"><i class="fa-solid fa-right-from-bracket"></i> Secure Logout</button>
+    </div>
+
+    <div class="bottom-nav">
+        <a href="index.html" class="nav-item" id="navShop"><i class="fa-solid fa-store"></i><span>Showcase</span></a>
+        <a href="deposit.html" class="nav-item" id="navDeposit"><i class="fa-solid fa-wallet"></i><span>Deposit</span></a>
+        <a href="pending.html" class="nav-item" id="navPending"><i class="fa-solid fa-clock-rotate-left"></i><span>Pending</span></a>
+        <a href="orders.html" class="nav-item" id="navOrders"><i class="fa-solid fa-box-open"></i><span>My Orders</span></a>
+        <a href="#" class="nav-item" id="navSupport" onclick="openSupportModal(event)"><i class="fa-solid fa-headset"></i><span>Support</span></a>
+    </div>
+
+    <div class="support-overlay" id="supportModal">
+        <div class="support-box">
+            <div class="close-modal" onclick="closeSupportModal()"><i class="fa-solid fa-times"></i></div>
+            <h3><i class="fa-solid fa-headset"></i> Live Support</h3>
+            <div class="support-desc">Choose a platform to contact us.</div>
+            <a href="https://wa.me/8801618202470" target="_blank" class="support-btn btn-wa"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>
+            <a href="https://t.me/SH_5617" target="_blank" class="support-btn btn-tg"><i class="fa-brands fa-telegram"></i> Telegram</a>
+        </div>
+    </div>
+
+    <script>
+        /* 🔒 এখানে আগে বট টোকেনটা পুরোপুরি লেখা ছিল (const BOT_TOKEN = "…")।
+           এটা ক্লায়েন্ট-সাইড স্ক্রিপ্ট — এই পেজ যে-ই খুলত সে F12 চেপেই
+           টোকেনটা পড়ে ফেলতে পারত, আর টোকেন দিয়ে বটের পূর্ণ নিয়ন্ত্রণ নেওয়া যায়।
+           টোকেন এখন শুধু সার্ভারে; Telegram-এর কল যায় api_tg_profile.php দিয়ে।
+           ⚠️ পুরনো টোকেনটা প্রকাশ হয়ে গিয়েছিল — @BotFather দিয়ে রিভোক করা জরুরি। */
+        
+        // Global variable (used for the ban check)
+        window.userIsBanned = false; 
+        
+        function getCachedData(key, expiryMinutes = 30) {
+            let cached = localStorage.getItem(key);
+            if(!cached) return null;
+            let data = JSON.parse(cached);
+            if(Date.now() > data.expiry) {
+                localStorage.removeItem(key);
+                return null;
+            }
+            return data.value;
+        }
+        
+        function setCachedData(key, value, expiryMinutes = 30) {
+            let data = {
+                value: value,
+                expiry: Date.now() + (expiryMinutes * 60 * 1000)
+            };
+            localStorage.setItem(key, JSON.stringify(data));
+        }
+        
+        function checkAndRedirect(url) {
+            if(window.userIsBanned) {
+                showToast("❌ Your account is banned! You cannot deposit.");
+                return false;
+            }
+            window.location.href = url;
+        }
+        
+        function openSupportModal(e) {
+            if(e) e.preventDefault();
+            document.getElementById('supportModal').style.display = 'flex';
+        }
+        
+        function closeSupportModal() {
+            document.getElementById('supportModal').style.display = 'none';
+        }
+        
+        function copyChatId() {
+            let idElement = document.getElementById('chatIdDisplay');
+            let idValue = idElement.innerText;
+            if(idValue && idValue !== '-') {
+                navigator.clipboard.writeText(idValue).then(() => {
+                    showToast("✅ ID copied!");
+                });
+            }
+        }
+        
+        function showToast(msg) {
+            let toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerHTML = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2500);
+        }
+
+        /** Always shows a money amount in $0.00 format */
+        function fmtMoney(n) {
+            let v = parseFloat(n);
+            if (!isFinite(v)) v = 0;
+            return '$' + v.toFixed(2);
+        }
+
+        /** Fills the Wallet Balance row on the My Account page */
+        async function loadWalletBalance() {
+            const tgId = localStorage.getItem('userTelegramId');
+            const el = document.getElementById('walletBalance');
+            if (!el) return;
+            if (!tgId) { el.innerText = '$0.00'; return; }
+            const cacheKey = 'balance:' + tgId;
+            if (window.SBD && SBD.cacheGet) {
+                const cached = SBD.cacheGet(cacheKey, true);
+                if (cached && cached.success) el.innerText = fmtMoney(cached.balance);
+            }
+            try {
+                const res = await fetch('api_balance.php?telegram_id=' + encodeURIComponent(tgId));
+                const d = await res.json();
+                if (d && d.success) {
+                    el.innerText = fmtMoney(d.balance);
+                    if (window.SBD && SBD.cacheSet) SBD.cacheSet(cacheKey, d, 5 * 60 * 1000);
+                }
+            } catch (e) { /* if the balance fails to load, the rest of the page keeps working */ }
+        }
+
+        async function loadUserInfo() {
+            let userTelegramId = localStorage.getItem('userTelegramId');
+            let sessionName = localStorage.getItem('userSessionName') || "User";
+            
+            if(!userTelegramId) {
+                document.getElementById('userNameDisplay').innerText = sessionName;
+                document.getElementById('userIdDisplay').innerHTML = '@' + sessionName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                document.getElementById('contactValue').innerHTML = '@' + sessionName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                document.getElementById('chatIdDisplay').innerText = '-';
+                const avatarDiv = document.getElementById('userAvatar');
+                avatarDiv.innerHTML = sessionName.charAt(0).toUpperCase();
+                avatarDiv.style.background = "linear-gradient(45deg, #00f2fe, #4facfe)";
+                avatarDiv.style.fontSize = "35px";
+                return;
+            }
+            
+            document.getElementById('chatIdDisplay').innerText = userTelegramId;
+            
+            // 1. Fetch Telegram profile info
+            let cachedUserInfo = getCachedData('user_info_' + userTelegramId, 60);
+            let userInfo = cachedUserInfo;
+            
+            if(!userInfo) {
+                try {
+                    /* ⚠️ URL-এ কোনো telegram_id পাঠানো হয় না — সার্ভার আইডিটা
+                       লগইন সেশন থেকে নেয়। আইডি প্যারামিটার হলে যে-কেউ পৃথিবীর
+                       যেকোনো Telegram আইডির নাম/ছবি এই এন্ডপয়েন্ট দিয়ে বের
+                       করে ফেলতে পারত। */
+                    const response = await fetch('api_tg_profile.php');
+                    const data = await response.json();
+                    if(data.success) {
+                        userInfo = {
+                            first_name: data.first_name || '',
+                            last_name: data.last_name || '',
+                            username: data.username || '',
+                            full_name: data.full_name || `${data.first_name || ''} ${data.last_name || ''}`.trim()
+                        };
+                        setCachedData('user_info_' + userTelegramId, userInfo, 60);
+                    }
+                } catch(e) { console.log("Telegram fetch error:", e); }
+            }
+            
+            if(userInfo && userInfo.username) {
+                const realUsername = userInfo.username;
+                document.getElementById('userIdDisplay').innerHTML = '@' + realUsername;
+                document.getElementById('contactValue').innerHTML = '@' + realUsername;
+                let displayName = userInfo.full_name || userInfo.first_name || sessionName;
+                document.getElementById('userNameDisplay').innerText = displayName;
+                localStorage.setItem('userTelegramUsername', realUsername);
+                localStorage.setItem('userSessionName', displayName);
+            } else {
+                document.getElementById('userIdDisplay').innerHTML = '@' + sessionName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                document.getElementById('contactValue').innerHTML = '@' + sessionName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                document.getElementById('userNameDisplay').innerText = sessionName;
+            }
+            
+            // Profile image
+            const avatarDiv = document.getElementById('userAvatar');
+
+            /* 🔒 পুরনো কোড ছবির ঠিকানাটা localStorage-এ জমিয়ে রাখত, আর ওই
+               ঠিকানা ছিল  api.telegram.org/file/bot<TOKEN>/…  — অর্থাৎ টোকেনটা
+               ভিজিটরের ব্রাউজারেই লেখা থেকে যেত। পুরনো ভিজিটরদের কাছ থেকে সেই
+               জমে থাকা কপিটা মুছে ফেলা হচ্ছে। */
+            localStorage.removeItem('user_photo_' + userTelegramId);
+
+            let initial = (userInfo?.first_name?.charAt(0) || sessionName.charAt(0)).toUpperCase();
+            showTelegramAvatar(avatarDiv, initial);
+            
+            // 2. Fetch status from the real-time database (api_users.php)
+            const accountCacheKey = 'account:' + userTelegramId;
+            if (window.SBD && SBD.cacheGet) {
+                const cachedAccount = SBD.cacheGet(accountCacheKey, true);
+                if(cachedAccount && cachedAccount.success && cachedAccount.user) {
+                    const u = cachedAccount.user;
+                    if(u.join_date) {
+                        document.getElementById('joinDate').innerHTML = new Date(u.join_date).toLocaleDateString('en-US', {
+                            year: 'numeric', month: 'long', day: 'numeric'
+                        });
+                    }
+                    window.userIsBanned = (u.status === 'banned');
+                    applyBanEffect(window.userIsBanned, u.ban_reason);
+                }
+            }
+            try {
+                let dbRes = await fetch(`api_users.php?action=get&telegram_id=${userTelegramId}`);
+                let dbData = await dbRes.json();
+                
+                if(dbData.success && dbData.user) {
+                    let u = dbData.user;
+                    
+                    // Update join date
+                    if(u.join_date) {
+                        document.getElementById('joinDate').innerHTML = new Date(u.join_date).toLocaleDateString('en-US', {
+                            year: 'numeric', month: 'long', day: 'numeric'
+                        });
+                    }
+                    
+                    // Update status (banned / active)
+                    window.userIsBanned = (u.status === 'banned');
+                    applyBanEffect(window.userIsBanned, u.ban_reason);
+                    if (window.SBD && SBD.cacheSet) SBD.cacheSet(accountCacheKey, dbData, 10 * 60 * 1000);
+                }
+            } catch(e) {
+                console.error("DB Fetch Error:", e);
+            }
+        }
+        
+        /* অ্যাভাটার বসানো
+           ---------------------------------------------------------------
+           টোকেন সহ ফাইল-URL (api.telegram.org/file/bot<TOKEN>/…) আর ব্রাউজারে
+           দেওয়া যায় না — ওই লিংকের ভেতরেই টোকেনটা থাকে। তাই ছবির বাইটগুলো
+           সার্ভার নিজে এনে দেয়:  api_tg_profile.php?photo=1
+           আইডি পাঠাতে হয় না, সার্ভার সেশন থেকেই নেয়।
+           ছবি না থাকলে বা লগইন না থাকলে এন্ডপয়েন্ট 404 দেয় → onerror চলে →
+           নামের প্রথম অক্ষরটাই অ্যাভাটার হয়ে যায় (আগের মতোই)। */
+        function showTelegramAvatar(avatarDiv, initial) {
+            avatarDiv.innerHTML = '<div class="loading-spinner"></div>';
+
+            const img = new Image();
+            img.alt = 'Profile';
+            img.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+
+            img.onload = function() {
+                avatarDiv.innerHTML = '';
+                avatarDiv.appendChild(img);
+            };
+
+            img.onerror = function() {
+                avatarDiv.innerHTML = initial;
+                avatarDiv.style.background = "linear-gradient(45deg, #00f2fe, #4facfe)";
+                avatarDiv.style.fontSize = "35px";
+                avatarDiv.style.fontWeight = "900";
+            };
+
+            img.src = 'api_tg_profile.php?photo=1';
+        }
+        
+        function applyBanEffect(isBanned, reason = '') {
+            let bannedBanner = document.getElementById('bannedBanner');
+            let depositBtn = document.getElementById('depositBtn');
+            let navItems = ['navShop', 'navDeposit', 'navPending', 'navOrders'];
+            let statusElement = document.getElementById('accountStatus');
+
+            if(isBanned) {
+                if(bannedBanner) {
+                    bannedBanner.style.display = 'block';
+                    bannedBanner.innerHTML = `<i class="fa-solid fa-ban"></i> Your account has been banned! Reason: ${reason || 'Violation of terms'}`;
+                }
+                if(depositBtn) depositBtn.classList.add('deposit-btn-disabled');
+                navItems.forEach(id => {
+                    let el = document.getElementById(id);
+                    if(el) el.classList.add('nav-disabled');
+                });
+                if(statusElement) {
+                    statusElement.innerHTML = '<span class="status-banned"><i class="fa-solid fa-ban"></i> ⛔ Banned</span>';
+                }
+            } else {
+                if(bannedBanner) bannedBanner.style.display = 'none';
+                if(depositBtn) depositBtn.classList.remove('deposit-btn-disabled');
+                navItems.forEach(id => {
+                    let el = document.getElementById(id);
+                    if(el) el.classList.remove('nav-disabled');
+                });
+                if(statusElement) {
+                    statusElement.innerHTML = '<span class="status-active"><i class="fa-solid fa-circle-check"></i> Active & Verified</span>';
+                }
+            }
+        }
+
+        async function logoutUser() {
+            // ⚠️ Previously only isLoggedIn was cleared from localStorage — the server OTP
+            //    session cookie stayed alive. So the server is now told to clear the session too.
+            try {
+                await fetch('api_user_login.php', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'logout' })
+                });
+            } catch (e) { /* local logout still happens even if the server cannot be reached */ }
+            localStorage.removeItem('isLoggedIn');
+            window.location.replace('login.html');
+        }
+
+        // Clicking outside the modal closes it
+        window.addEventListener('click', function (event) {
+            let sm = document.getElementById('supportModal');
+            if (event.target === sm) closeSupportModal();
+        });
+
+        // ⚡ Previously there was  window.onload = function() { loadUserInfo(); };  here.
+        //    window.onload waits for every external file (Font Awesome from cdnjs + fonts)
+        //    to arrive — with a slow/blocked CDN neither balance nor name showed up,
+        //    and a reload pulled them from cache and fixed it. (details in app-boot.js)
+        function bootAccount() {
+            loadUserInfo();
+            loadWalletBalance();
+        }
+        if (window.SBD) { SBD.ready(bootAccount, { onEveryShow: true }); }
+        else { document.addEventListener('DOMContentLoaded', bootAccount); }
+    </script>
+</body>
+</html>
