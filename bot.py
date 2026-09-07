@@ -18,6 +18,7 @@ ADMIN_SECRET_KEY = "892559967"
 USER_HTML = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
+  <script>window.storeBdtRate = __STORE_BDT_RATE__;</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Shop - Premium Store</title>
@@ -2474,6 +2475,10 @@ USER_HTML = r"""<!DOCTYPE html>
     #confirmPaymentBtn:disabled {opacity:.45;cursor:not-allowed;}
     .pm-details[hidden],#paymentMethodQr[hidden] {display:none!important;}
     @media(max-width:540px){.pm-form-grid{grid-template-columns:1fr;gap:0}.pm-details{padding:16px}.pm-choice-list{grid-template-columns:repeat(3,minmax(0,1fr))}.pm-choice{font-size:13px;overflow-wrap:anywhere;}}
+
+    .product-image,.cart-item-image,.order-image {object-fit:contain!important;object-position:center;background:#100d20;}
+    #modalImage {object-fit:contain!important;object-position:center;width:100%;max-height:420px;background:#100d20;}
+    #productImagePreview[hidden] {display:none!important;}
   </style>
 </head>
 <body>
@@ -2673,7 +2678,7 @@ USER_HTML = r"""<!DOCTYPE html>
         <div class="pm-muted">Send payment to</div>
         <p id="paymentReceiver" class="pm-account"></p>
         <button class="btn btn-secondary" type="button" onclick="copyPaymentReceiver()">Copy receiving details</button>
-        <strong id="methodPayable"></strong>
+        <strong id="methodPayable"></strong><p id="paymentRateNote" class="pm-muted"></p>
         <img id="paymentMethodQr" class="qr-image" alt="Payment QR code" hidden>
         <p id="paymentInstructions" class="info-text"></p>
       </div>
@@ -2928,6 +2933,8 @@ USER_HTML = r"""<!DOCTYPE html>
           id,
           ...product
         }));
+        for(const item of window.cart || []) {const current=window.allProducts.find(p=>p.id===item.id);if(current)item.image=current.imageUrl;}
+        saveCartToStorage();
         displayProducts(window.allProducts);
       } else {window.allProducts = []; displayProducts([]);}
     });
@@ -3067,11 +3074,11 @@ USER_HTML = r"""<!DOCTYPE html>
     }
 
     // Format currency
-    function formatCurrency(amount) {
-      return '$' + parseFloat(amount).toLocaleString('en-IN', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2
-      });
+    function formatCurrency(amount, rate = window.storeBdtRate) {
+      const value = Number(amount) || 0;
+      const effectiveRate = Number(rate) > 0 ? Number(rate) : window.storeBdtRate;
+      const options = {minimumFractionDigits: 2, maximumFractionDigits: 2};
+      return '$' + value.toLocaleString('en-US', options) + ' (৳' + (value * effectiveRate).toLocaleString('en-US', options) + ')';
     }
 
     // Calculate discount percentage
@@ -3922,7 +3929,10 @@ function applyFilter(products, filter) {
       document.getElementById('paymentReceiver').textContent=method.account;
       document.getElementById('paymentInstructions').textContent=method.instructions || 'Send payment to the receiving details above, then enter your transaction ID.';
       const total=window.cart.reduce((sum,item)=>sum+parseFloat(item.price),0)+(window.appliedCoupon?window.appliedCoupon.discount:0);
-      document.getElementById('methodPayable').textContent=(total*method.rate).toFixed(2)+' '+method.currency;
+      window.storeBdtRate = method.bdtRate || window.storeBdtRate;
+      document.getElementById('paymentAmount').textContent = formatCurrency(total);
+      document.getElementById('methodPayable').textContent = formatCurrency(total);
+      document.getElementById('paymentRateNote').textContent = '$1 = ৳' + window.storeBdtRate.toFixed(2) + ' · Pay ' + (total * method.rate).toFixed(2) + ' ' + method.currency + ' via ' + method.name;
       document.getElementById('paidCurrency').textContent=method.currency;
       const qr=document.getElementById('paymentMethodQr');qr.hidden=!method.qrUrl;
       if(method.qrUrl)qr.src=method.qrUrl;else qr.removeAttribute('src');
@@ -3934,12 +3944,16 @@ function applyFilter(products, filter) {
     }
 
     // Proceed to payment
-    function proceedToPayment() {
+    async function proceedToPayment() {
       if (window.cart.length === 0) {
         showNotification('Cart is empty', 'error');
         return;
       }
 
+      try {
+        const settings = await window.dbGet(window.dbRef(window.db, 'meta/currency'));
+        window.storeBdtRate = settings.val().usdToBdt;
+      } catch(error) {showNotification('Could not load the exchange rate. Please try again.', 'error');return;}
       // Calculate total
       const subtotal = window.cart.reduce((sum, item) => sum + parseFloat(item.price), 0);
       const discount = window.appliedCoupon ? window.appliedCoupon.discount : 0;
@@ -4181,6 +4195,7 @@ function applyFilter(products, filter) {
               let downloadLink = null;
               if (productSnapshot.exists()) {
                 downloadLink = productSnapshot.val().downloadLink || null;
+                if(order.productSnapshot && productSnapshot.val().imageUrl) order.productSnapshot.imageUrl=productSnapshot.val().imageUrl;
               }
               
               const card = createOrderCard(purchase.orderId, order, downloadLink);
@@ -4233,7 +4248,7 @@ function applyFilter(products, filter) {
                onerror="this.src='https://via.placeholder.com/80/1a0a2e/00ffff?text=No+Image'">
           <div class="order-details">
             <div class="order-product-title">${escapeHtml(order.productSnapshot?.title || 'Product')}</div>
-            <div class="order-price">${formatCurrency(order.finalAmount || order.productSnapshot?.discountedPrice || 0)}</div>
+            <div class="order-price">${formatCurrency(order.finalAmount || order.productSnapshot?.discountedPrice || 0, order.bdtRate)}</div>
             ${order.couponUsed ? `<div style="font-size: 12px; color: #00ff88; margin-top: 5px;">
               <i class="fas fa-ticket-alt"></i> Coupon: ${escapeHtml(order.couponUsed)} 
               (+${formatCurrency(order.discountAmount || 0)})
@@ -4494,7 +4509,7 @@ Once payment is completed, the download link for your purchased digital item (HT
               </div>
               <div class="accordion-content">
                 <p class="accordion-text">
-                  We accept payments through UPI, Bank Transfer, and other secure payment methods. All prices are in USDT ($) unless otherwise stated. Payment must be completed before product delivery or access. We use secure SSL encryption for all transactions. After payment, please provide the UTR/Transaction ID for verification. Orders are processed only after payment confirmation.
+                  We accept payments through UPI, Bank Transfer, and other secure payment methods. Prices are displayed in dollars ($) and Bangladeshi taka (৳) using the store exchange rate. Payment must be completed before product delivery or access. We use secure SSL encryption for all transactions. After payment, please provide the UTR/Transaction ID for verification. Orders are processed only after payment confirmation.
                 </p>
               </div>
             </div>
@@ -5363,6 +5378,7 @@ Once payment is completed, the download link for your purchased digital item (HT
 ADMIN_HTML = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
+  <script>window.storeBdtRate = __STORE_BDT_RATE__;</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Premium Admin Panel v3.0</title>
@@ -7350,6 +7366,10 @@ ADMIN_HTML = r"""<!DOCTYPE html>
     #confirmPaymentBtn:disabled {opacity:.45;cursor:not-allowed;}
     .pm-details[hidden],#paymentMethodQr[hidden] {display:none!important;}
     @media(max-width:540px){.pm-form-grid{grid-template-columns:1fr;gap:0}.pm-details{padding:16px}.pm-choice-list{grid-template-columns:repeat(3,minmax(0,1fr))}.pm-choice{font-size:13px;overflow-wrap:anywhere;}}
+
+    .product-image,.cart-item-image,.order-image {object-fit:contain!important;object-position:center;background:#100d20;}
+    #modalImage {object-fit:contain!important;object-position:center;width:100%;max-height:420px;background:#100d20;}
+    #productImagePreview[hidden] {display:none!important;}
   </style>
 </head>
 <body>
@@ -7567,6 +7587,14 @@ ADMIN_HTML = r"""<!DOCTYPE html>
 
     <div id="paymentsTab" class="tab-content">
       <div class="card">
+        <h2 class="card-title"><i class="fas fa-exchange-alt"></i> Dollar / BDT Rate</h2>
+        <p class="pm-muted">All product and checkout prices show both dollars ($) and Bangladeshi taka (৳). This single rate also applies to all BDT payment methods.</p>
+        <div class="input-group"><label for="storeBdtRateInput">1 dollar ($) = how many BDT?</label><input id="storeBdtRateInput" type="number" min="0.01" max="1000000" step="0.01" value="__STORE_BDT_RATE__"></div>
+        <button class="btn" id="saveStoreRateBtn" onclick="saveStoreCurrencyRate()">Save Dollar Rate</button>
+        <p id="storeRateMessage" class="pm-muted" role="status"></p>
+      </div>
+
+      <div class="card">
         <h2 class="card-title"><i class="fas fa-wallet"></i> Payment Methods</h2>
         <p class="pm-muted">Set your receiving details, then switch a method on to show it at checkout.</p>
         <div class="pm-presets">
@@ -7583,8 +7611,8 @@ ADMIN_HTML = r"""<!DOCTYPE html>
         <div class="input-group"><label for="pmName">Method name</label><input id="pmName" maxlength="60" placeholder="bKash / Nagad / Binance"></div>
         <div class="input-group"><label for="pmAccount">Receiving number / Binance Pay ID / wallet address</label><input id="pmAccount" maxlength="250" placeholder="Your payment receiving details"></div>
         <div class="pm-form-grid">
-          <div class="input-group"><label for="pmCurrency">Payment currency</label><select id="pmCurrency"><option value="BDT">BDT (Taka)</option><option value="USDT">USDT</option><option value="USD">USD</option></select></div>
-          <div class="input-group"><label for="pmRate">Payment currency units per 1 USDT</label><input id="pmRate" type="number" min="0.000001" step="any" placeholder="Set your conversion rate"><small class="pm-muted">Store prices use USDT ($). Use 1 for USDT.</small></div>
+          <div class="input-group"><label for="pmCurrency">Payment currency</label><select id="pmCurrency"><option value="BDT">Bangladeshi Taka (BDT)</option><option value="USD">Dollar ($ / USDT)</option></select></div>
+          <div class="input-group"><label for="pmRate">Automatic conversion rate</label><input id="pmRate" type="number" readonly><small class="pm-muted">Uses the Dollar / BDT Rate above. Dollar methods use 1.</small></div>
         </div>
         <div class="input-group"><label for="pmInstructions">Payment instructions</label><textarea id="pmInstructions" maxlength="2000" placeholder="Send Money / Cash In, account name, or Binance network and memo if needed"></textarea></div>
         <div class="input-group"><label for="pmLogoUrl">Logo image link</label><input id="pmLogoUrl" type="url" placeholder="https://example.com/logo.png"><small class="pm-muted">Or upload a PNG, JPG, WEBP or GIF (up to 500 KB).</small><input id="pmLogoFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif"><div class="pm-logo-preview"><img id="pmLogoPreview" alt="Logo preview" hidden><button class="btn btn-secondary" type="button" onclick="clearPaymentLogo()">Remove logo</button></div></div>
@@ -7606,8 +7634,11 @@ ADMIN_HTML = r"""<!DOCTYPE html>
           <input type="text" id="productTitle" placeholder="Product name">
         </div>
         <div class="input-group">
-          <label><i class="fas fa-image"></i> Product Image URL</label>
-          <input type="text" id="productImageUrl" placeholder="https://example.com/product.jpg">
+          <label for="productImageFile"><i class="fas fa-image"></i> Product Photo</label>
+          <input type="file" id="productImageFile" accept="image/jpeg,image/png,image/webp,image/gif">
+          <input type="hidden" id="productImageUrl">
+          <small class="pm-muted">JPG, PNG, WebP or GIF · up to 10 MB. Auto-sized without stretching or cropping. Animated images use their first frame.</small>
+          <img id="productImagePreview" alt="Product photo preview" hidden style="width:100%;max-width:420px;height:220px;object-fit:contain;background:#120f22;border-radius:14px;margin-top:12px;">
         </div>
         <div class="input-group">
           <label><i class="fas fa-align-left"></i> Product Description</label>
@@ -7627,11 +7658,12 @@ ADMIN_HTML = r"""<!DOCTYPE html>
           <input type="text" id="productQrImageUrl" placeholder="https://example.com/qr-code.png">
         </div>
         <div class="input-group">
-          <label><i class="fas fa-download"></i> Download Link</label>
-          <input type="text" id="productDownloadLink" placeholder="https://example.com/download/product.zip">
-          <small style="color: #999; font-size: 12px; margin-top: 5px; display: block;">
-            This link will be available to users after successful order
-          </small>
+          <label for="productZipFile"><i class="fas fa-file-archive"></i> Product ZIP File</label>
+          <input type="file" id="productZipFile" accept=".zip,application/zip">
+          <input type="hidden" id="productDownloadLink">
+          <small class="pm-muted">Upload a ZIP up to 100 MB. Customers can download it after you confirm their order. Select a new ZIP to replace the current file.</small>
+          <div id="productZipInfo" class="pm-muted">No ZIP file selected.</div>
+          <div id="productUploadStatus" class="pm-muted" role="status" aria-live="polite"></div>
         </div>
 
         <!-- Product Screenshots Section -->
@@ -8112,13 +8144,11 @@ ADMIN_HTML = r"""<!DOCTYPE html>
       };
     }
 
-    function formatCurrency(amount) {
-      const value = parseFloat(amount);
-      if (value === 0) return 'FREE';
-      return '$' + value.toLocaleString('en-IN', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2
-      });
+    function formatCurrency(amount, rate = window.storeBdtRate) {
+      const value = Number(amount) || 0;
+      const effectiveRate = Number(rate) > 0 ? Number(rate) : window.storeBdtRate;
+      const options = {minimumFractionDigits: 2, maximumFractionDigits: 2};
+      return '$' + value.toLocaleString('en-US', options) + ' (৳' + (value * effectiveRate).toLocaleString('en-US', options) + ')';
     }
 
     function formatDate(dateString) {
@@ -8153,7 +8183,7 @@ ADMIN_HTML = r"""<!DOCTYPE html>
       });
 
       tabContent.classList.add('active');
-      if(tabName === 'payments') loadPaymentMethodsAdmin();
+      if(tabName === 'payments') {loadPaymentMethodsAdmin();loadStoreCurrencyRate();}
 
       document.querySelectorAll('.drawer-nav-item').forEach(item => {
         item.classList.remove('active');
@@ -8306,6 +8336,32 @@ ADMIN_HTML = r"""<!DOCTYPE html>
       }
     }
 
+    function updatePaymentRatePreview() {
+      document.getElementById('pmRate').value = document.getElementById('pmCurrency').value === 'BDT' ? window.storeBdtRate : 1;
+    }
+    async function loadStoreCurrencyRate() {
+      try {
+        const snapshot = await window.dbGet(window.dbRef(window.db, 'meta/currency'));
+        window.storeBdtRate = snapshot.val().usdToBdt;
+        document.getElementById('storeBdtRateInput').value = window.storeBdtRate;
+        updatePaymentRatePreview();
+      } catch(error) {document.getElementById('storeRateMessage').textContent = error.message;}
+    }
+    async function saveStoreCurrencyRate() {
+      const button = document.getElementById('saveStoreRateBtn');button.disabled=true;
+      const message = document.getElementById('storeRateMessage');message.textContent='Saving...';
+      try {
+        const rate = Number(document.getElementById('storeBdtRateInput').value);
+        if(!Number.isFinite(rate) || rate <= 0 || rate > 1000000) throw new Error('Enter a rate greater than 0, up to 1000000.');
+        await window.dbSet(window.dbRef(window.db, 'meta/currency'), {usdToBdt:rate});
+        await loadStoreCurrencyRate();await loadPaymentMethodsAdmin();
+        loadProducts();loadOrders();loadCoupons();updateStats();updateDiscountPreview();
+        message.textContent='$1 = ৳'+window.storeBdtRate.toFixed(2)+' saved. All BDT payment methods use this rate.';
+      } catch(error) {message.textContent=error.message;} finally {button.disabled=false;}
+    }
+    document.getElementById('pmCurrency').addEventListener('change',updatePaymentRatePreview);
+    updatePaymentRatePreview();
+
     let paymentMethodsAdmin = {};
     let paymentLogoValue = '';
     async function loadPaymentMethodsAdmin() {
@@ -8344,15 +8400,15 @@ ADMIN_HTML = r"""<!DOCTYPE html>
       document.getElementById('pmEditId').value='';document.getElementById('pmName').value=name;
       document.getElementById('pmAccount').value='';document.getElementById('pmInstructions').value='';
       document.getElementById('pmQrUrl').value='';document.getElementById('pmActive').checked=false;
-      document.getElementById('pmCurrency').value=name==='Binance'?'USDT':'BDT';
-      document.getElementById('pmRate').value=name==='Binance'?'1':'';
+      document.getElementById('pmCurrency').value=name==='Binance'?'USD':'BDT';
+      updatePaymentRatePreview();
       document.getElementById('pmFormTitle').textContent='Add Payment Method';clearPaymentLogo();paymentFormMessage('');
     }
     function editPaymentMethod(id) {
       const m=paymentMethodsAdmin[id];if(!m)return;
       document.getElementById('pmEditId').value=id;document.getElementById('pmName').value=m.name;
-      document.getElementById('pmAccount').value=m.account||'';document.getElementById('pmCurrency').value=m.currency||'USDT';
-      document.getElementById('pmRate').value=m.rate||'';document.getElementById('pmInstructions').value=m.instructions||'';
+      document.getElementById('pmAccount').value=m.account||'';document.getElementById('pmCurrency').value=m.currency==='BDT'?'BDT':'USD';
+      updatePaymentRatePreview();document.getElementById('pmInstructions').value=m.instructions||'';
       document.getElementById('pmQrUrl').value=m.qrUrl||'';document.getElementById('pmActive').checked=!!m.isActive;
       paymentLogoValue=m.logo||'';document.getElementById('pmLogoUrl').value=paymentLogoValue.startsWith('data:')?'':paymentLogoValue;
       document.getElementById('pmLogoFile').value='';previewPaymentLogo();paymentFormMessage('');
@@ -8655,7 +8711,7 @@ ADMIN_HTML = r"""<!DOCTYPE html>
         <div class="product-price">
           ${priceDisplay}
         </div>
-        ${product.downloadLink ? '<div style="color: #00ff88; font-size: 12px; margin-bottom: 5px;"><i class="fas fa-download"></i> Download link available</div>' : ''}
+        ${product.downloadLink ? '<div style="color: #00ff88; font-size: 12px; margin-bottom: 5px;"><i class="fas fa-download"></i> Download file available</div>' : ''}
         ${screenshotCount > 0 ? `<div style="color: #00ffff; font-size: 12px; margin-bottom: 10px;"><i class="fas fa-images"></i> ${screenshotCount} Screenshot(s)</div>` : ''}
         <div class="btn-group">
           <button class="btn-small btn-edit" data-edit-id="${id}"><i class="fas fa-edit"></i> Edit</button>
@@ -8697,22 +8753,62 @@ ADMIN_HTML = r"""<!DOCTYPE html>
       previewText.textContent = `Final price: ${formatCurrency(finalPrice)}`;
     }
 
+    let productAssetState = {imageFileId:'',archiveId:'',archiveName:''};
+    let productPreviewObjectUrl = null;
+    function setProductImagePreview(url) {
+      const image=document.getElementById('productImagePreview');image.hidden=!url;
+      if(url)image.src=url;else image.removeAttribute('src');
+    }
+    function resetProductAssetInputs() {
+      if(productPreviewObjectUrl)URL.revokeObjectURL(productPreviewObjectUrl);
+      productPreviewObjectUrl=null;productAssetState={imageFileId:'',archiveId:'',archiveName:''};
+      document.getElementById('productImageFile').value='';document.getElementById('productZipFile').value='';
+      document.getElementById('productZipInfo').textContent='No ZIP file selected.';
+      document.getElementById('productUploadStatus').textContent='';setProductImagePreview('');
+    }
+    function productUpload(kind,file) {
+      return new Promise((resolve,reject)=>{
+        const xhr=new XMLHttpRequest();xhr.open('POST','/api/uploads/'+kind);xhr.withCredentials=true;
+        xhr.setRequestHeader('X-Ariyan-Request','1');xhr.timeout=300000;
+        xhr.upload.onprogress=e=>{document.getElementById('productUploadStatus').textContent='Uploading '+(kind==='image'?'photo':'ZIP')+(e.lengthComputable?' · '+Math.round(e.loaded/e.total*100)+'%':'...');};
+        xhr.onload=()=>{let data;try{data=JSON.parse(xhr.responseText);}catch(e){reject(new Error('Upload failed. Please try again.'));return;}if(xhr.status>=200&&xhr.status<300)resolve(data);else reject(new Error(data.error||'Upload failed.'));};
+        xhr.onerror=()=>reject(new Error('Upload interrupted. Check your connection and try again.'));
+        xhr.ontimeout=()=>reject(new Error('Upload timed out. Please try again.'));
+        const form=new FormData();form.append('file',file);xhr.send(form);
+      });
+    }
+    document.getElementById('productImageFile').addEventListener('change',e=>{
+      const file=e.target.files[0];if(!file)return;
+      if(!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type)||file.size>10*1024*1024){showMessage('productSuccess','Choose a JPG, PNG, WebP or GIF up to 10 MB.','error');e.target.value='';return;}
+      if(productPreviewObjectUrl)URL.revokeObjectURL(productPreviewObjectUrl);
+      productPreviewObjectUrl=URL.createObjectURL(file);setProductImagePreview(productPreviewObjectUrl);
+      document.getElementById('productUploadStatus').textContent='Photo selected. Save Product to upload and auto-fit.';
+    });
+    document.getElementById('productZipFile').addEventListener('change',e=>{
+      const file=e.target.files[0];if(!file)return;
+      if(!file.name.toLowerCase().endsWith('.zip')||file.size>100*1024*1024){showMessage('productSuccess','Choose a ZIP file up to 100 MB.','error');e.target.value='';return;}
+      document.getElementById('productZipInfo').textContent=file.name+' · '+(file.size/1024/1024).toFixed(2)+' MB · ready to upload';
+    });
+
     async function saveProduct() {
-      const productId = document.getElementById('editProductId').value;
+      const isEditing = !!document.getElementById('editProductId').value;
+      const productId = document.getElementById('editProductId').value || crypto.randomUUID().replaceAll('-', '');
+      const imageFile = document.getElementById('productImageFile').files[0];
+      const zipFile = document.getElementById('productZipFile').files[0];
       const title = document.getElementById('productTitle').value.trim();
-      const imageUrl = document.getElementById('productImageUrl').value.trim();
+      let imageUrl = document.getElementById('productImageUrl').value.trim();
       const description = document.getElementById('productDescription').value.trim();
       const realPrice = parseFloat(document.getElementById('productRealPrice').value);
       const discountPercent = parseFloat(document.getElementById('productDiscountPercent').value);
       const qrImageUrl = document.getElementById('productQrImageUrl').value.trim();
-      const downloadLink = document.getElementById('productDownloadLink').value.trim();
+      let downloadLink = document.getElementById('productDownloadLink').value.trim();
 
-      if (!title || !imageUrl || !description) {
+      if (!title || (!imageUrl && !imageFile) || !description) {
         showMessage('productSuccess', 'Please fill all required fields', 'error');
         return;
       }
 
-      if (!isValidUrl(imageUrl)) {
+      if (!imageFile && !isValidUrl(imageUrl) && !/^\/media\/[a-f0-9]{32}$/.test(imageUrl)) {
         showMessage('productSuccess', 'Please enter a valid image URL', 'error');
         return;
       }
@@ -8722,7 +8818,7 @@ ADMIN_HTML = r"""<!DOCTYPE html>
         return;
       }
 
-      if (downloadLink && !isValidUrl(downloadLink)) {
+      if (downloadLink && !isValidUrl(downloadLink) && !/^\/download\/[A-Za-z0-9_-]+$/.test(downloadLink)) {
         showMessage('productSuccess', 'Please enter a valid download link URL', 'error');
         return;
       }
@@ -8757,7 +8853,7 @@ ADMIN_HTML = r"""<!DOCTYPE html>
         updatedAt: new Date().toISOString()
       };
 
-      if (!productId) {
+      if (!isEditing) {
         productData.createdAt = new Date().toISOString();
       }
 
@@ -8766,12 +8862,28 @@ ADMIN_HTML = r"""<!DOCTYPE html>
       btn.innerHTML = '<span class="loading-spinner"></span>Saving...';
 
       try {
-        if (productId) {
+        document.getElementById('productImageFile').disabled=true;
+        document.getElementById('productZipFile').disabled=true;
+        if(imageFile) {
+          const uploaded = await productUpload('image',imageFile);
+          imageUrl=uploaded.url;productAssetState.imageFileId=uploaded.id;
+          document.getElementById('productImageUrl').value=imageUrl;
+          document.getElementById('productImageFile').value='';setProductImagePreview(imageUrl);
+        }
+        if(zipFile) {
+          const uploaded = await productUpload('zip',zipFile);
+          productAssetState.archiveId=uploaded.id;productAssetState.archiveName=uploaded.filename;
+          document.getElementById('productZipFile').value='';
+          document.getElementById('productZipInfo').textContent=uploaded.filename+' · uploaded';
+        }
+        if(productAssetState.archiveId) downloadLink='/download/'+productId;
+        Object.assign(productData,{imageUrl,downloadLink,...productAssetState});
+        document.getElementById('productUploadStatus').textContent='Saving product...';
+        if (isEditing) {
           await window.dbUpdate(window.dbRef(window.db, `products/${productId}`), productData);
           showMessage('productSuccess', '✅ Product updated successfully!', 'success');
         } else {
-          const newRef = window.dbPush(window.dbRef(window.db, 'products'));
-          await window.dbSet(newRef, productData);
+          await window.dbSet(window.dbRef(window.db, 'products/'+productId), productData);
           showMessage('productSuccess', '✅ Product added successfully!', 'success');
         }
         
@@ -8779,10 +8891,13 @@ ADMIN_HTML = r"""<!DOCTYPE html>
         loadProducts();
         window.showNotification('✅ Product saved successfully!');
       } catch (error) {
+        document.getElementById('productUploadStatus').textContent=error.message;
         showMessage('productSuccess', 'Error saving product: ' + error.message, 'error');
       } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-save"></i> Save Product';
+        document.getElementById('productImageFile').disabled=false;
+        document.getElementById('productZipFile').disabled=false;
       }
     }
 
@@ -8818,6 +8933,10 @@ ADMIN_HTML = r"""<!DOCTYPE html>
       // Set values
       document.getElementById('editProductId').value = id;
       document.getElementById('productTitle').value = product.title;
+      resetProductAssetInputs();
+      productAssetState={imageFileId:product.imageFileId||'',archiveId:product.archiveId||'',archiveName:product.archiveName||''};
+      setProductImagePreview(product.imageUrl);
+      document.getElementById('productZipInfo').textContent=product.archiveName || (product.downloadLink ? 'Existing download available. Upload a ZIP to replace it.' : 'No ZIP attached.');
       document.getElementById('productImageUrl').value = product.imageUrl;
       document.getElementById('productDescription').value = product.description;
       document.getElementById('productRealPrice').value = product.realPrice;
@@ -8864,6 +8983,7 @@ ADMIN_HTML = r"""<!DOCTYPE html>
     }
 
     function clearProductForm() {
+      resetProductAssetInputs();
       document.getElementById('editProductId').value = '';
       document.getElementById('productTitle').value = '';
       document.getElementById('productImageUrl').value = '';
@@ -9051,7 +9171,7 @@ ADMIN_HTML = r"""<!DOCTYPE html>
           <div><span class="order-field">Customer:</span> <span class="order-value">${escapeHtml(order.userInput?.name || 'N/A')}</span></div>
           ${order.paymentMethod ? `<div><span class="order-field">Payment Method:</span> <span class="order-value">${escapeHtml(order.paymentMethod.name)}</span></div><div><span class="order-field">Paid:</span> <span class="order-value">${escapeHtml(String(order.amountPaid))} ${escapeHtml(order.paymentMethod.currency)}</span></div><div><span class="order-field">Receiving Account:</span> <span class="order-value">${escapeHtml(order.paymentMethod.account)}</span></div><div><span class="order-field">Expected Payment:</span> <span class="order-value">${escapeHtml(String(order.paymentMethod.expectedAmount))} ${escapeHtml(order.paymentMethod.currency)}</span></div>` : ''}
           <div><span class="order-field">Transaction ID:</span> <span class="order-value">${escapeHtml(order.userInput?.utrId || 'N/A')}</span></div>
-          <div><span class="order-field">Price:</span> <span class="order-value" style="color: #00ff88;">${formatCurrency(order.finalAmount || order.productSnapshot?.discountedPrice || 0)}</span></div>
+          <div><span class="order-field">Price:</span> <span class="order-value" style="color: #00ff88;">${formatCurrency(order.finalAmount || order.productSnapshot?.discountedPrice || 0, order.bdtRate)}</span></div>
           ${order.couponUsed ? `<div><span class="order-field">Coupon:</span> <span class="order-value" style="color: #ffa500;">${escapeHtml(order.couponUsed)} (+${formatCurrency(order.discountAmount || 0)})</span></div>` : ''}
         </div>
         <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(0, 255, 255, 0.2);">
@@ -9632,7 +9752,7 @@ ADMIN_HTML = r"""<!DOCTYPE html>
                   <div style="background: rgba(255, 255, 255, 0.05); padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid rgba(0, 255, 255, 0.2);">
                     <p style="color: #a855f7; font-weight: bold; margin-bottom: 5px;">${escapeHtml(order.productSnapshot?.title || 'Unknown Product')}</p>
                     <p style="font-size: 12px; color: #999;">Purchased: ${formatDate(purchase.purchasedAt)}</p>
-                    <p style="font-size: 12px; color: #00ff88;">Amount: ${formatCurrency(order.finalAmount || order.productSnapshot?.discountedPrice || 0)}</p>
+                    <p style="font-size: 12px; color: #00ff88;">Amount: ${formatCurrency(order.finalAmount || order.productSnapshot?.discountedPrice || 0, order.bdtRate)}</p>
                   </div>
                 `;
               }
@@ -10294,6 +10414,11 @@ CLIENT_JS = r"""(() => {
 """
 
 import argparse
+import io
+import warnings
+import zipfile
+from gridfs import GridFS, NoFile
+from PIL import Image, ImageOps, UnidentifiedImageError
 import base64
 import binascii
 import hashlib
@@ -10316,7 +10441,7 @@ from urllib.parse import urlsplit
 from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 101 * 1024 * 1024
 _DB = None
 _DB_LOCK = threading.Lock()
 ROOTS = {'products', 'orders', 'coupons', 'users', 'chats', 'meta', 'gamePlays', 'paymentMethods'}
@@ -10367,12 +10492,13 @@ def payload():
     return value
 
 
-def cookie_name():
-    return 'ariyan_admin' if payload().get('panel') == 'admin' else 'ariyan_user'
+def cookie_name(panel=None):
+    panel = panel if panel is not None else payload().get('panel')
+    return 'ariyan_admin' if panel == 'admin' else 'ariyan_user'
 
 
-def identity(required=False):
-    token = request.cookies.get(cookie_name(), '')
+def identity(required=False, panel=None):
+    token = request.cookies.get(cookie_name(panel), '')
     entry = database().sessions.find_one({'_id': hashlib.sha256(token.encode()).hexdigest(), 'expiresAt': {'$gt': now()}}) if token else None
     user = entry.get('user') if entry else None
     if user and user['role'] == 'user' and not database().accounts.find_one({'_id': user['uid']}):
@@ -10442,8 +10568,12 @@ def normalize_origin(value):
 @app.before_request
 def protect_api():
     if request.path.startswith('/api/') and request.method == 'POST':
-        if request.headers.get('X-Ariyan-Request') != '1' or not request.is_json:
+        is_upload = request.path in ('/api/uploads/image', '/api/uploads/zip')
+        valid_type = request.mimetype == 'multipart/form-data' if is_upload else request.is_json
+        if request.headers.get('X-Ariyan-Request') != '1' or not valid_type:
             raise APIError('Invalid request.', 403)
+        if not is_upload and (request.content_length or 0) > 2 * 1024 * 1024:
+            raise APIError('Request is too large.', 413)
         # No cross-origin API access. The custom header also forces a CORS preflight.
         origin = request.headers.get('Origin')
         if origin is not None:
@@ -10456,7 +10586,7 @@ def protect_api():
 @app.after_request
 def headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
-    response.headers['Cache-Control'] = 'no-store'
+    response.headers['Cache-Control'] = 'public, max-age=31536000, immutable' if request.path.startswith('/media/') and response.status_code == 200 else 'no-store'
     return response
 
 
@@ -10466,14 +10596,136 @@ def headers(response):
 @app.get('/user.html')
 @app.get('/index.html')
 def shop_page():
-    return USER_HTML
+    return USER_HTML.replace('__STORE_BDT_RATE__', str(exchange_rate()))
 
 
 @app.get('/admin')
 @app.get('/admin/')
 @app.get('/admin.html')
 def admin_page():
-    return ADMIN_HTML
+    return ADMIN_HTML.replace('__STORE_BDT_RATE__', str(exchange_rate()))
+
+
+MAX_PRODUCT_IMAGE_BYTES = 10 * 1024 * 1024
+MAX_PRODUCT_ZIP_BYTES = 100 * 1024 * 1024
+Image.MAX_IMAGE_PIXELS = 25_000_000
+
+
+def asset_store():
+    return GridFS(database(), collection='product_assets')
+
+
+def asset_record(asset_id, kind):
+    if not isinstance(asset_id,str) or not re.fullmatch(r'[a-f0-9]{32}',asset_id):
+        raise APIError('File not found.',404)
+    try: file=asset_store().get(asset_id)
+    except NoFile: raise APIError('File not found.',404)
+    if (file.metadata or {}).get('kind')!=kind:
+        file.close()
+        raise APIError('File not found.',404)
+    return file
+
+
+def normalize_product_image(stream):
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter('error',Image.DecompressionBombWarning)
+            with Image.open(stream) as original:
+                if original.format not in ('JPEG','PNG','WEBP','GIF'):
+                    raise APIError('Choose a JPG, PNG, WebP or GIF image.')
+                original.seek(0)
+                image=ImageOps.exif_transpose(original)
+                image.thumbnail((1600,1600),Image.Resampling.LANCZOS)
+                image=image.convert('RGBA' if 'A' in image.getbands() or 'transparency' in image.info else 'RGB')
+                out=io.BytesIO()
+                image.save(out,format='WEBP',quality=88,method=4)
+                width,height=image.size
+                out.seek(0)
+                return out,width,height
+    except APIError: raise
+    except (UnidentifiedImageError,OSError,ValueError,Image.DecompressionBombError,Image.DecompressionBombWarning):
+        raise APIError('This image could not be processed. Use a JPG, PNG, WebP or GIF with at most 25 million pixels.')
+
+
+@app.post('/api/uploads/image')
+@app.post('/api/uploads/zip')
+def upload_product_asset():
+    user=identity(True,panel='admin')
+    if user['role']!='admin': raise APIError('Admin access required.',403)
+    kind='image' if request.path.endswith('/image') else 'zip'
+    upload=request.files.get('file')
+    if upload is None or not upload.filename: raise APIError('Select a file to upload.')
+    stream=upload.stream
+    stream.seek(0,2);length=stream.tell();stream.seek(0)
+    limit=MAX_PRODUCT_IMAGE_BYTES if kind=='image' else MAX_PRODUCT_ZIP_BYTES
+    if not 0<length<=limit: raise APIError('Image limit is 10 MB; ZIP limit is 100 MB.',413)
+    asset_id=secrets.token_hex(16)
+    if kind=='image':
+        data,width,height=normalize_product_image(stream)
+        try:
+            asset_store().put(data,_id=asset_id,filename=asset_id+'.webp',contentType='image/webp',metadata={'kind':'image','width':width,'height':height,'uploadedAt':stamp()})
+        finally: data.close()
+        return jsonify(id=asset_id,url='/media/'+asset_id,width=width,height=height)
+    filename=os.path.basename(upload.filename.replace('\\','/'))
+    if not filename.lower().endswith('.zip'): raise APIError('Select a .zip archive.')
+    if not zipfile.is_zipfile(stream): raise APIError('This file is not a valid ZIP archive.')
+    stream.seek(0)
+    filename=re.sub(r'[^A-Za-z0-9._ -]','_',filename)[:160]
+    if not filename.lower().endswith('.zip'): filename=filename[:156]+'.zip'
+    asset_store().put(stream,_id=asset_id,filename=filename,contentType='application/zip',metadata={'kind':'zip','uploadedAt':stamp()})
+    return jsonify(id=asset_id,filename=filename,size=length)
+
+
+def asset_response(file,attachment=False):
+    def chunks():
+        try:
+            while True:
+                chunk=file.read(256*1024)
+                if not chunk: break
+                yield chunk
+        finally: file.close()
+    response=app.response_class(chunks(),mimetype='application/zip' if attachment else 'image/webp')
+    response.content_length=file.length
+    response.headers['X-Content-Type-Options']='nosniff'
+    if attachment:
+        response.headers.set('Content-Disposition','attachment',filename=file.filename)
+    response.call_on_close(file.close)
+    return response
+
+
+@app.get('/media/<asset_id>')
+def product_image_asset(asset_id):
+    return asset_response(asset_record(asset_id,'image'))
+
+
+@app.get('/download/<product_id>')
+def product_zip_download(product_id):
+    if not ID_PATTERN.fullmatch(product_id): raise APIError('Product not found.',404)
+    user=identity(panel='user')
+    admin=identity(panel='admin')
+    is_admin=bool(admin and admin['role']=='admin')
+    if not is_admin:
+        if not user: raise APIError('Log in to your customer account to download.',401)
+        confirmed=database().orders.find_one({'value.userId':user['uid'],'value.productId':product_id,'value.status':'confirmed'})
+        if not confirmed: raise APIError('Your order must be confirmed before you can download this product.',403)
+    product=read_value(['products',product_id])
+    if not product or not product.get('archiveId'): raise APIError('No ZIP is attached to this product.',404)
+    return asset_response(asset_record(product['archiveId'],'zip'),attachment=True)
+
+
+def validate_product_assets(parts,op,value):
+    # Only administrators reach this function. Bind assets to server-generated URLs.
+    if len(parts)!=2 or op not in ('set','update') or not isinstance(value,dict): return value
+    existing=read_value(parts) or {}
+    merged={**existing,**value} if op=='update' else dict(value)
+    if merged.get('imageFileId'):
+        file=asset_record(merged['imageFileId'],'image');file.close()
+        value['imageUrl']='/media/'+merged['imageFileId']
+    if merged.get('archiveId'):
+        file=asset_record(merged['archiveId'],'zip')
+        value['archiveName']=file.filename;file.close()
+        value['downloadLink']='/download/'+parts[1]
+    return value
 
 
 @app.get('/api/client.js')
@@ -10624,7 +10876,7 @@ def authorize_read(parts,user):
     root=parts[0];admin=user and user['role']=='admin'
     if admin: return
     if root in ('products','paymentMethods'): return
-    if root=='meta' and len(parts)>=2 and parts[1] in ('brand','contact'): return
+    if root=='meta' and len(parts)>=2 and parts[1] in ('brand','contact','currency'): return
     if not user: raise APIError('Please log in.',401,'auth/required')
     if root=='coupons': return
     if root in ('users','chats','gamePlays') and len(parts)>=2 and parts[1]==user['uid']: return
@@ -10646,9 +10898,13 @@ def filtered_products(parts,user):
     if len(parts)==1:
         if value:
             for key, product in value.items():
-                if key not in allowed and isinstance(product,dict): product.pop('downloadLink',None)
+                if isinstance(product,dict):
+                    if key not in allowed: product.pop('downloadLink',None)
+                    product.pop('archiveId',None)
         return value
-    if value and parts[1] not in allowed: value.pop('downloadLink',None)
+    if value:
+        if parts[1] not in allowed: value.pop('downloadLink',None)
+        value.pop('archiveId',None)
     for key in parts[2:]: value=value.get(key) if isinstance(value,dict) else None
     return value
 
@@ -10683,8 +10939,11 @@ def data_api():
     data=payload();parts=path_parts(data.get('path'));op=data.get('op');user=identity()
     if op=='get':
         authorize_read(parts,user)
-        if parts[0]=='paymentMethods' and not (user and user['role']=='admin'):
-            value=read_public_payment_methods(parts)
+        if parts[:2]==['meta','currency']:
+            value={'usdToBdt':exchange_rate()}
+            for key in parts[2:]: value=value.get(key) if isinstance(value,dict) else None
+        elif parts[0]=='paymentMethods':
+            value=read_public_payment_methods(parts, include_inactive=bool(user and user['role']=='admin'))
         elif parts[0]=='products' and not (user and user['role']=='admin'):
             value=filtered_products(parts,user)
         elif parts[0]=='users' and len(parts)>=3 and parts[2]=='purchases':
@@ -10700,6 +10959,14 @@ def data_api():
     if op not in ('set','update','remove'): raise APIError('Unknown operation.')
     if not user: raise APIError('Please log in.',401,'auth/required')
     value=data.get('value');clean_value(value)
+    if parts[:2]==['meta','currency']:
+        if user['role']!='admin': raise APIError('Admin access required.',403)
+        if len(parts)!=2: raise APIError('Update the complete currency setting.')
+        if op!='remove':
+            if not isinstance(value,dict) or set(value)!={'usdToBdt'}: raise APIError('Provide the dollar-to-BDT rate.')
+            rate=number(value['usdToBdt'])
+            if not 0<rate<=1000000: raise APIError('Exchange rate must be greater than 0, up to 1000000.')
+            value={'usdToBdt':rate,'updatedAt':stamp()};op='set'
     if parts[0]=='paymentMethods':
         if user['role']!='admin': raise APIError('Admin access required.',403)
         if len(parts)!=2: raise APIError('Select an individual payment method.')
@@ -10710,6 +10977,7 @@ def data_api():
             op='set'
 
     value=authorize_write(parts,op,value,user)
+    if parts[0]=='products': value=validate_product_assets(parts,op,value)
     write_value(parts,op,value)
     if user['role']=='admin' and parts[0]=='users' and len(parts)==2 and op=='remove':
         database().accounts.delete_one({'_id':parts[1]})
@@ -10720,7 +10988,7 @@ def data_api():
 def seed_payment_methods(db):
     if db.settings.find_one({'_id':'payment_methods_initialized'}):
         return
-    for key,name,currency,rate in [('bkash','bKash','BDT',0),('nagad','Nagad','BDT',0),('binance','Binance','USDT',1)]:
+    for key,name,currency,rate in [('bkash','bKash','BDT',128),('nagad','Nagad','BDT',128),('binance','Binance','USD',1)]:
         db.paymentMethods.update_one({'_id':key},{'$setOnInsert':{'value':{'name':name,'account':'','currency':currency,'rate':rate,'instructions':'','logo':'','qrUrl':'','isActive':False,'updatedAt':stamp()}}},upsert=True)
     db.settings.update_one({'_id':'payment_methods_initialized'},{'$set':{'done':True}},upsert=True)
 
@@ -10755,17 +11023,30 @@ def validate_payment_method(value):
         return v.strip()
     method={'name':text_field('name',60,True),'account':text_field('account',250),
             'instructions':text_field('instructions',2000),'currency':value.get('currency','USDT'),
-            'rate':number(value.get('rate',0)), 'logo':payment_image(value.get('logo','')),
+            'rate':exchange_rate() if value.get('currency')=='BDT' else 1, 'logo':payment_image(value.get('logo','')),
             'qrUrl':payment_image(value.get('qrUrl',''),False),'isActive':value.get('isActive',False),'updatedAt':stamp()}
-    if method['currency'] not in ('BDT','USD','USDT'): raise APIError('Choose BDT, USD or USDT.')
+    if method['currency']=='USDT': method['currency']='USD'
+    if method['currency'] not in ('BDT','USD'): raise APIError('Choose BDT or dollars (USD).')
     if type(method['isActive']) is not bool: raise APIError('Enabled must be on or off.')
     if method['isActive'] and (not method['account'] or not 0<method['rate']<=1000000):
-        raise APIError('Set receiving details and a valid conversion rate before turning this method on.')
+        raise APIError('Set receiving details before turning this method on.')
     return method
 
 
-def read_public_payment_methods(parts):
-    methods={d['_id']:d['value'] for d in database().paymentMethods.find({'value.isActive':True})}
+def exchange_rate():
+    settings=read_value(['meta','currency']) or {}
+    rate=number(settings.get('usdToBdt',128))
+    if not 0<rate<=1000000: raise APIError('Invalid store exchange rate. Ask the administrator to update it.',503)
+    return rate
+
+
+def read_public_payment_methods(parts, include_inactive=False):
+    rate=exchange_rate()
+    methods={d['_id']:d['value'] for d in database().paymentMethods.find({} if include_inactive else {'value.isActive':True})}
+    for method in methods.values():
+        method['currency']='BDT' if method.get('currency')=='BDT' else 'USD'
+        method['rate']=rate if method['currency']=='BDT' else 1
+        method['bdtRate']=rate
     if len(parts)==1: return methods or None
     value=methods.get(parts[1])
     for key in parts[2:]: value=value.get(key) if isinstance(value,dict) else None
@@ -10823,11 +11104,13 @@ def checkout():
                 adjustment=subtotal*adjustment/100
                 maximum=number(c.get('maxDiscount',0))
                 if maximum: adjustment=min(adjustment,maximum)
+        order_bdt_rate=exchange_rate()
+        if method['currency']=='BDT': method['rate']=order_bdt_rate
         method_snapshot={'id':method_id,'name':method['name'],'account':method['account'],'currency':method['currency'],'rate':method['rate'],'expectedAmount':round((subtotal+adjustment)*method['rate'],2)}
         orders={}
         for i,(pid,product,price) in enumerate(products):
             oid=user['uid']+'_'+reqid+'_'+str(i)
-            orders[oid]={'productId':pid,'paymentMethod':method_snapshot,'amountPaid':paid,'productSnapshot':{'title':product.get('title',''),'imageUrl':product.get('imageUrl',''),'discountedPrice':price},'userInput':{'utrId':utr,'name':user.get('displayName') or 'N/A','email':user['email'],'phone':'N/A'},'userId':user['uid'],'userEmail':user['email'],'couponUsed':code,'discountAmount':round(adjustment,2),'finalAmount':round(subtotal+adjustment,2),'status':'pending','createdAt':stamp()}
+            orders[oid]={'productId':pid,'bdtRate':order_bdt_rate,'bdtTotal':round((subtotal+adjustment)*order_bdt_rate,2),'paymentMethod':method_snapshot,'amountPaid':paid,'productSnapshot':{'title':product.get('title',''),'imageUrl':product.get('imageUrl',''),'discountedPrice':price},'userInput':{'utrId':utr,'name':user.get('displayName') or 'N/A','email':user['email'],'phone':'N/A'},'userId':user['uid'],'userEmail':user['email'],'couponUsed':code,'discountAmount':round(adjustment,2),'finalAmount':round(subtotal+adjustment,2),'status':'pending','createdAt':stamp()}
         # Keep the supplied shop's additive coupon calculation; amounts are computed on the server.
         plan={'_id':checkout_id,'orders':orders,'couponId':coupon['_id'] if coupon else None,'couponLimit':int(coupon['value'].get('usageLimit',0) or 0) if coupon else 0,'createdAt':stamp()}
         try: db.checkouts.insert_one(plan)
